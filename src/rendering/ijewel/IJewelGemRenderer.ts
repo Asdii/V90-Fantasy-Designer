@@ -27,7 +27,7 @@ export interface IJewelGemRendererOptions {
 }
 
 /**
- * Interactive gemstone renderer backed by the WebGi v0.9.19 iJewel DiamondPlugin.
+ * Interactive gemstone renderer backed by the WebGi v0.9.11 iJewel DiamondPlugin.
  * The legacy runtime is isolated here; no domain geometry depends on WebGi classes.
  */
 export class IJewelGemRenderer {
@@ -48,7 +48,7 @@ export class IJewelGemRenderer {
       useRgbm: true,
     });
     this.viewer.renderer.displayCanvasScaling = Math.min(window.devicePixelRatio, 1.5);
-    canvas.dataset.gemRenderer = 'ijewel-diamond-0.9.19';
+    canvas.dataset.gemRenderer = 'ijewel-diamond-0.9.11';
 
     if (options.projectionMode === 'orthographic') {
       const controller = this.viewer.createCamera(new OrthographicCamera(-5, 5, 5, -5, 0.01, 1000));
@@ -79,9 +79,7 @@ export class IJewelGemRenderer {
     }
     this.diamondPlugin?.makeDiamondMesh(
       mesh as unknown as IModel<Mesh>,
-      // A single edited gem can afford the higher capture resolution. This is
-      // especially important for shallow V walls in the plugin's normal map.
-      { cacheKey, normalMapRes: 1024, normalMapPrecision: 'high' },
+      { cacheKey, normalMapRes: 512, normalMapPrecision: 'medium' },
       createIJewelDiamondSettings(material) as import('webgi').DiamondMaterialParameters & { isDiamond?: true },
     );
     console.debug('[WebGiMeshSwap] iJewel material applied');
@@ -178,7 +176,7 @@ export class IJewelGemRenderer {
   }
 }
 
-// Legacy WebGi ships duplicate invariant ViewerApp declarations that predate TS 5 strict variance.
+// WebGi 0.9.11 ships duplicate invariant ViewerApp declarations that predate TS 5 strict variance.
 async function addLegacyPlugin<T>(viewer: ViewerApp, plugin: T): Promise<T> {
   return (viewer.addPlugin as (value: unknown) => Promise<T>)(plugin);
 }
