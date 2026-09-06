@@ -3,3 +3,6 @@ dist/
 *.tsbuildinfo
 .vite/
 npm-debug.log*
+
+# Local upstream reference used during renderer research; not part of this app.
+/work/gemLibrary-reference/
