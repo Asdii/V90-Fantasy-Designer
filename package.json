@@ -1,0 +1,30 @@
+{
+  "name": "fantasy-cutting-designer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "npm run build && vite preview --host 127.0.0.1 --port 3000",
+    "build": "tsc -b && vite build",
+    "build:pages": "tsc -b && vite build --base=./",
+    "preview": "vite preview --host 127.0.0.1 --port 3000",
+    "test": "vitest run --configLoader runner"
+  },
+  "dependencies": {
+    "manifold-3d": "^3.5.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "three": "https://pkg.threepipe.org/dep/three/-/v0.163.10003/package.tgz",
+    "three-mesh-bvh": "^0.9.7",
+    "typescript": "^5.9.0",
+    "vite": "^7.0.0",
+    "webgi": "https://storage.googleapis.com/dist.pixotronics.com/webgi/runtime/bundle-0.9.11.tgz"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@types/three": "^0.179.0",
+    "@types/webgi": "https://storage.googleapis.com/dist.pixotronics.com/webgi/runtime/bundle-types-0.9.11.tgz",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,0 +1,679 @@
+:root {
+  color: #edf0f4;
+  background: #111316;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+button,
+select {
+  font: inherit;
+}
+
+.appShell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100%;
+  height: 100%;
+  background: #14171b;
+}
+
+.appTabs {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  min-height: 46px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2d333a;
+  background: #191d22;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 280px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.sidePanel {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  border-left: 1px solid #2d333a;
+  background: #171b20;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2d333a;
+  background: #191d22;
+  overflow-x: auto;
+}
+
+.toolbarGroup {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+
+.toolbarLabel {
+  color: #aab2bd;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.toolbarButton,
+.toolbarSelect {
+  min-height: 30px;
+  border: 1px solid #3a424b;
+  border-radius: 6px;
+  background: #242a31;
+  color: #edf0f4;
+}
+
+.toolbarButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 10px;
+  cursor: pointer;
+}
+
+.fileButton {
+  position: relative;
+  overflow: hidden;
+}
+
+.fileButton input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.toolbarButton:hover,
+.toolbarButton.active,
+.toolbarSelect:hover {
+  border-color: #6ed0ff;
+  background: #2a3440;
+}
+
+.toolbarSelect {
+  padding: 0 28px 0 10px;
+}
+
+.wireframeToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  color: #dce2ea;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.viewportShell {
+  min-width: 0;
+  min-height: 0;
+  position: relative;
+}
+
+.modelInfoPanel {
+  min-width: 0;
+  padding: 12px;
+  color: #d8dee7;
+}
+
+.patternPanel {
+  min-width: 0;
+  padding: 12px;
+  border-top: 1px solid #2d333a;
+  color: #d8dee7;
+}
+
+.modelInfoPanel h2,
+.modelInfoPanel h3,
+.patternPanel h2,
+.patternPanel h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.modelInfoPanel h3,
+.patternPanel h3 {
+  margin-top: 18px;
+  color: #f2f5f8;
+}
+
+.modelInfoPanel dl,
+.patternPanel dl {
+  display: grid;
+  grid-template-columns: 118px minmax(0, 1fr);
+  gap: 7px 10px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.modelInfoPanel dt,
+.patternPanel dt {
+  color: #98a3b0;
+}
+
+.modelInfoPanel dd,
+.patternPanel dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.modelInfoPanel p,
+.patternPanel p {
+  margin: 0;
+  font-size: 12px;
+  color: #c4cbd4;
+}
+
+.toolGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.patternControls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  font-size: 12px;
+}
+
+.patternControls label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.coordinateEditor {
+  display: grid;
+  gap: 10px;
+  margin: 10px 0;
+}
+
+.coordinateEditor fieldset {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #343c45;
+  border-radius: 6px;
+}
+
+.coordinateEditor legend {
+  color: #98a3b0;
+  font-size: 12px;
+}
+
+.coordinateEditor label {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 6px;
+  align-items: center;
+  font-size: 12px;
+}
+
+.coordinateEditor input {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid #3a424b;
+  border-radius: 6px;
+  background: #11161b;
+  color: #edf0f4;
+  padding: 0 8px;
+}
+
+.toolbarButton:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.warningList {
+  margin: 0;
+  padding-left: 18px;
+  color: #ffd36e;
+  font-size: 12px;
+}
+
+.errorText {
+  margin-bottom: 12px;
+  color: #ff8c8c;
+}
+
+.viewportCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  outline: none;
+}
+
+.statusBar {
+  display: flex;
+  gap: 18px;
+  align-items: center;
+  min-height: 30px;
+  padding: 6px 12px;
+  border-top: 1px solid #2d333a;
+  background: #191d22;
+  color: #c4cbd4;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.patternDesignerShell {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.patternDesignerTabs {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #2d333a;
+  background: #20252b;
+  overflow-x: auto;
+}
+
+.patternDesignerWorkspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+.patternCanvasFrame {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: #f7f8fa;
+}
+
+.patternCanvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.gridLine {
+  stroke: #d8dde3;
+  stroke-width: 1;
+}
+
+.majorGridLine {
+  stroke: #c2c9d1;
+}
+
+.axisLine {
+  stroke-width: 1.5;
+}
+
+.xAxis {
+  stroke: #c14646;
+}
+
+.yAxis {
+  stroke: #3e7f58;
+}
+
+.originPoint {
+  fill: #20252b;
+}
+
+.primitive {
+  fill: none;
+  vector-effect: non-scaling-stroke;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.patternPrimitive {
+  stroke: #1769aa;
+  stroke-width: 2.2;
+}
+
+.constructionPrimitive {
+  stroke: #8a6f22;
+  stroke-width: 1.4;
+  stroke-dasharray: 7 5;
+}
+
+.selectedPrimitive {
+  stroke: #d04d2f;
+  stroke-width: 3.2;
+}
+
+.previewPrimitive {
+  opacity: 0.55;
+  stroke: #111316;
+}
+
+.patternDesignerStatus {
+  position: absolute;
+  left: 12px;
+  bottom: 10px;
+  padding: 6px 8px;
+  border: 1px solid #d7dce2;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #20252b;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+}
+
+.patternContextPanel {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  padding: 12px;
+  border-left: 1px solid #2d333a;
+  background: #171b20;
+  color: #d8dee7;
+}
+
+.patternContextPanel h2,
+.patternContextPanel h3 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.patternContextPanel h3 {
+  margin-top: 18px;
+  color: #f2f5f8;
+}
+
+.patternContextPanel dl {
+  display: grid;
+  grid-template-columns: 100px minmax(0, 1fr);
+  gap: 7px 10px;
+  margin: 0 0 12px;
+  font-size: 12px;
+}
+
+.patternContextPanel dt {
+  color: #98a3b0;
+}
+
+.patternContextPanel dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.numberRow {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+  margin: 7px 0;
+  font-size: 12px;
+}
+
+.numberRow input {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid #3a424b;
+  border-radius: 6px;
+  background: #11161b;
+  color: #edf0f4;
+  padding: 0 8px;
+}
+
+.patternDataText {
+  max-height: 240px;
+  overflow: auto;
+  margin: 10px 0 0;
+  padding: 8px;
+  border: 1px solid #343c45;
+  border-radius: 6px;
+  background: #11161b;
+  color: #cbd3dc;
+  font-size: 11px;
+}
+
+.cutHelperBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(4, 7, 10, 0.76);
+}
+
+.cutHelperDialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(960px, calc(100vw - 48px));
+  height: min(760px, calc(100vh - 48px));
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  border: 1px solid #3a424b;
+  border-radius: 8px;
+  background: #171b20;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.48);
+}
+
+.cutHelperHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 14px;
+  border-bottom: 1px solid #343b43;
+}
+
+.cutHelperHeader h2,
+.cutHelperHeader p {
+  margin: 0;
+}
+
+.cutHelperHeader h2 {
+  font-size: 15px;
+}
+
+.cutHelperHeader p {
+  margin-top: 3px;
+  color: #97a2ae;
+  font-size: 11px;
+}
+
+.cutHelperViewport {
+  min-width: 0;
+  min-height: 0;
+  padding: 18px;
+  background: #eef1f4;
+}
+
+.cutHelperViewport svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.cutHelperFacet {
+  fill: #dce3e8;
+  stroke: #38444e;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.cutHelperAxis {
+  stroke-width: 1;
+  stroke-dasharray: 5 5;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.42;
+}
+
+.cutHelperAxisX {
+  stroke: #b94848;
+}
+
+.cutHelperAxisY {
+  stroke: #32805a;
+}
+
+.cutHelperCompletedCut,
+.cutHelperActiveOpening,
+.cutHelperActiveCenter {
+  fill: none;
+  stroke-linecap: butt;
+  stroke-linejoin: miter;
+}
+
+.cutHelperCompletedCut {
+  stroke: #347b98;
+  opacity: 0.5;
+}
+
+.cutHelperActiveOpening {
+  stroke: #19bfe8;
+  opacity: 0.58;
+}
+
+.cutHelperActiveCenter {
+  stroke: #101820;
+}
+
+.cutHelperOrigin {
+  fill: #f7f9fb;
+  stroke: #202a33;
+  stroke-width: 1.4;
+  vector-effect: non-scaling-stroke;
+}
+
+.cutHelperEmpty {
+  display: grid;
+  height: 100%;
+  margin: 0;
+  place-items: center;
+  color: #44515d;
+}
+
+.cutHelperFooter {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 14px;
+  border-top: 1px solid #343b43;
+}
+
+.cutHelperMetrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(110px, 1fr));
+  gap: 8px;
+}
+
+.cutHelperMetric {
+  min-width: 0;
+}
+
+.cutHelperMetric span,
+.cutHelperMetric strong {
+  display: block;
+}
+
+.cutHelperMetric span {
+  margin-bottom: 3px;
+  color: #8e99a5;
+  font-size: 10px;
+}
+
+.cutHelperMetric strong {
+  color: #f2f5f7;
+  font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 860px) {
+  .workspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 210px;
+  }
+
+  .modelInfoPanel {
+    border-top: 0;
+  }
+
+  .patternDesignerWorkspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) 260px;
+  }
+
+  .patternContextPanel {
+    border-left: 0;
+    border-top: 1px solid #2d333a;
+  }
+
+  .cutHelperBackdrop {
+    padding: 10px;
+  }
+
+  .cutHelperDialog {
+    width: calc(100vw - 20px);
+    height: calc(100vh - 20px);
+  }
+
+  .cutHelperFooter {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .cutHelperMetrics {
+    grid-column: 1 / -1;
+    grid-row: 1;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
