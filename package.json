@@ -11,6 +11,7 @@
     "test": "vitest run --configLoader runner"
   },
   "dependencies": {
+    "esbuild-wasm": "^0.27.7",
     "manifold-3d": "^3.5.1",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
