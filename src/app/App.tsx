@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { loadAppSettings, saveAppSettings } from './AppSettings';
 import { createPlaceholderGemGeometry } from '../geometry/createPlaceholderGemGeometry';
 import {
   calculateMaximumMeasurementSpan,
@@ -39,6 +40,7 @@ import type { GemEnvironmentPreset } from '../rendering/EnvironmentPreset';
 import { GemPreviewPanel } from '../ui/GemPreviewPanel';
 import { CutHelperDialog } from '../ui/CutHelperDialog';
 import { FacetMeasurementDialog, type FacetMeasurementResult } from '../ui/FacetMeasurementDialog';
+import { AppSettingsDialog } from '../ui/AppSettingsDialog';
 import { PatternDesigner } from '../ui/PatternDesigner';
 import { StatusBar } from '../ui/StatusBar';
 import { Toolbar } from '../ui/Toolbar';
@@ -49,6 +51,8 @@ type DesignerSize = 'small' | 'medium' | 'large';
 type CutOperationState = { readonly status: 'idle' | 'running' | 'success' | 'error'; readonly message?: string };
 
 export function App() {
+  const [appSettings, setAppSettings] = useState(() => loadAppSettings(window.localStorage));
+  const [showAppSettings, setShowAppSettings] = useState(false);
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceArea>('pattern');
   const [designerSize, setDesignerSize] = useState<DesignerSize>('medium');
   const [background, setBackground] = useState<BackgroundMode>('white');
@@ -98,6 +102,8 @@ export function App() {
   const latestProjectRef = useRef(project);
 
   latestProjectRef.current = project;
+
+  useEffect(() => saveAppSettings(appSettings, window.localStorage), [appSettings]);
 
   const cutHelperSteps = useMemo(() => {
     const referenceOperation = project.cutOperations[0];
@@ -468,7 +474,7 @@ export function App() {
   }, []);
 
   return (
-    <main className="appShell">
+    <main className={`appShell visibility-${appSettings.highVisibility ? 'high' : 'standard'} density-${appSettings.density} textSize-${appSettings.textSize}${appSettings.reducedMotion ? ' reduceMotion' : ''}`}>
       <header className="appTabs">
         <strong className="workspaceTitle">V90 Fantasy Designer</strong>
         <div className="designerSizeControls" role="group" aria-label="Pattern Designer size">
@@ -488,6 +494,9 @@ export function App() {
           onClick={() => setShowFacetMeasurement(true)}
         >
           Measure Facet
+        </button>
+        <button className="toolbarButton" onClick={() => setShowAppSettings(true)}>
+          Settings
         </button>
       </header>
 
@@ -629,6 +638,9 @@ export function App() {
           onApply={applyFacetMeasurement}
           onClose={() => setShowFacetMeasurement(false)}
         />
+      ) : null}
+      {showAppSettings ? (
+        <AppSettingsDialog settings={appSettings} onChange={setAppSettings} onClose={() => setShowAppSettings(false)} />
       ) : null}
     </main>
   );
