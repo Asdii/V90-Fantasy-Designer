@@ -5,6 +5,7 @@ import {
   GBufferPlugin,
   Mesh,
   OrthographicCamera,
+  PerspectiveCamera,
   ProgressivePlugin,
   SSAOPlugin,
   SSRPlugin,
@@ -50,10 +51,7 @@ export class IJewelGemRenderer {
     this.viewer.renderer.displayCanvasScaling = Math.min(window.devicePixelRatio, 1.5);
     canvas.dataset.gemRenderer = 'ijewel-diamond-0.9.11';
 
-    if (options.projectionMode === 'orthographic') {
-      const controller = this.viewer.createCamera(new OrthographicCamera(-5, 5, 5, -5, 0.01, 1000));
-      this.viewer.scene.activeCamera = controller as typeof this.viewer.scene.activeCamera;
-    }
+    this.setProjectionMode(options.projectionMode);
 
     this.ready = this.initialize(options.environment);
     this.setBackground(options.background);
@@ -69,6 +67,42 @@ export class IJewelGemRenderer {
 
   get controls() {
     return this.viewer.scene.activeCamera.controls;
+  }
+
+  setProjectionMode(mode: 'perspective' | 'orthographic') {
+    const currentController = this.viewer.scene.activeCamera;
+    const currentCamera = currentController.cameraObject;
+    const wantsOrthographic = mode === 'orthographic';
+    if ((currentCamera instanceof OrthographicCamera) === wantsOrthographic) {
+      return;
+    }
+
+    const target = currentController.controls?.target?.clone() ?? currentController.target.clone();
+    const position = currentCamera.position.clone();
+    const up = currentCamera.up.clone();
+    const distance = Math.max(position.distanceTo(target), 0.01);
+    const aspect = Math.max(this.viewer.canvas.clientWidth / Math.max(this.viewer.canvas.clientHeight, 1), 0.01);
+    const perspectiveFov = currentCamera instanceof PerspectiveCamera ? currentCamera.fov : 45;
+    const halfHeight = Math.max(distance * Math.tan((perspectiveFov * Math.PI) / 360), 0.01);
+    const camera = wantsOrthographic
+      ? new OrthographicCamera(-halfHeight * aspect, halfHeight * aspect, halfHeight, -halfHeight, currentCamera.near, currentCamera.far)
+      : new PerspectiveCamera(45, aspect, currentCamera.near, currentCamera.far);
+
+    camera.position.copy(position);
+    camera.up.copy(up);
+    camera.lookAt(target);
+    const controller = this.viewer.createCamera(camera);
+    controller.setCameraOptions({ controlsMode: 'orbit' }, false);
+    this.viewer.scene.activeCamera = controller as typeof this.viewer.scene.activeCamera;
+    controller.refreshCameraControls(false);
+    const controls = controller.controls;
+    if (!controls?.target) {
+      throw new Error('Could not initialize Threepipe orbit controls for the selected projection.');
+    }
+    controls.target.copy(target);
+    controls.update();
+    controller.refreshAspect(false);
+    this.invalidate();
   }
 
   async prepareGem(mesh: Mesh, material: GemMaterial, cacheKey: string) {

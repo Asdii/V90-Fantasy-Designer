@@ -62,7 +62,6 @@ interface ViewportProps {
   readonly vGrooveSettings?: VGrooveSettings;
   readonly vGrooveDisplayMode: VGrooveDisplayMode;
   readonly showVGroovePreview: boolean;
-  readonly showGrooveVectors: boolean;
   readonly showFacetBoundaries: boolean;
   readonly showFacetNormals: boolean;
   readonly showLocalWorkplane: boolean;
@@ -72,7 +71,6 @@ interface ViewportProps {
   readonly activeTool: PatternTool;
   readonly gridSnap: GridSnapStep;
   readonly selectedSegmentId?: string;
-  readonly showOutsideFacet: boolean;
   readonly snapEnabled: boolean;
   readonly radialSymmetryEnabled: boolean;
   readonly radialSymmetryOrder: number;
@@ -123,7 +121,6 @@ export function Viewport({
   vGrooveSettings,
   vGrooveDisplayMode,
   showVGroovePreview,
-  showGrooveVectors,
   showFacetBoundaries,
   showFacetNormals,
   showLocalWorkplane,
@@ -133,7 +130,6 @@ export function Viewport({
   activeTool,
   gridSnap,
   selectedSegmentId,
-  showOutsideFacet,
   snapEnabled,
   radialSymmetryEnabled,
   radialSymmetryOrder,
@@ -269,6 +265,24 @@ export function Viewport({
       webGiRendererRef.current = null;
       webGiRenderer.dispose();
     };
+  }, []);
+
+  useEffect(() => {
+    const renderer = webGiRendererRef.current;
+    if (!renderer) {
+      return;
+    }
+    try {
+      renderer.setProjectionMode(projectionMode);
+      const controls = renderer.controls as unknown as ViewportControls | undefined;
+      if (!controls?.target) {
+        throw new Error('Threepipe orbit controls are unavailable for the selected projection.');
+      }
+      cameraRef.current = renderer.camera as unknown as AppCamera;
+      controlsRef.current = controls;
+    } catch (error) {
+      callbacksRef.current.onRendererError(formatError(error, 'Could not change camera projection.'));
+    }
   }, [projectionMode]);
 
   useEffect(() => {
@@ -327,8 +341,8 @@ export function Viewport({
     const facet = selectedFacetId !== undefined ? geometry?.facets.find((item) => item.id === selectedFacetId) : undefined;
     const localGeometry = geometry && facet ? createFacetLocalGeometry(geometry, facet) : undefined;
 
-    renderer?.render(geometry, localGeometry, cleanRender || cutPreviewGeometry ? undefined : designPattern, patternPlacement, showOutsideFacet);
-  }, [cleanRender, cutPreviewGeometry, designPattern, patternPlacement, project.geometry, selectedFacetId, showOutsideFacet]);
+    renderer?.render(geometry, localGeometry, cleanRender || cutPreviewGeometry ? undefined : designPattern, patternPlacement, true);
+  }, [cleanRender, cutPreviewGeometry, designPattern, patternPlacement, project.geometry, selectedFacetId]);
 
   useEffect(() => {
     const geometry = project.geometry;
@@ -337,7 +351,7 @@ export function Viewport({
     const localGeometry = geometry && facet ? createFacetLocalGeometry(geometry, facet) : undefined;
 
     if (!renderer || !geometry || !localGeometry || !designPattern || !patternPlacement || !vGrooveSettings) {
-      renderer?.render(undefined, vGrooveDisplayMode, false, showGrooveVectors);
+      renderer?.render(undefined, vGrooveDisplayMode, false, false);
       return;
     }
 
@@ -348,7 +362,7 @@ export function Viewport({
       grooveGeometry,
       'centerLines',
       cleanRender ? false : showVGroovePreview && showCenterLines,
-      cleanRender ? false : showGrooveVectors,
+      false,
     );
   }, [
     cleanRender,
@@ -357,7 +371,6 @@ export function Viewport({
     project.geometry,
     selectedFacetId,
     showVGroovePreview,
-    showGrooveVectors,
     vGrooveDisplayMode,
     vGrooveSettings,
   ]);
@@ -379,7 +392,7 @@ export function Viewport({
         ),
       ],
       selectedSegmentId,
-      showOutsideFacet,
+      showOutsideFacet: true,
     });
   }, [
     activeTool,
@@ -394,7 +407,6 @@ export function Viewport({
     radialSymmetryOrder,
     selectedFacetId,
     selectedSegmentId,
-    showOutsideFacet,
   ]);
 
   useEffect(() => {

@@ -65,12 +65,10 @@ export function App() {
   const [hoveredFacetId, setHoveredFacetId] = useState<number | undefined>();
   const [designPattern, setDesignPattern] = useState<DesignPattern>(() => createEmptyDesignPattern());
   const [patternPlacement, setPatternPlacement] = useState<PatternPlacement | undefined>();
-  const [showOutsidePattern, setShowOutsidePattern] = useState(true);
   const [vGrooveSettings, setVGrooveSettings] = useState<VGrooveSettings>(defaultVGrooveSettings);
   const [vGrooveCutterPreset, setVGrooveCutterPreset] = useState<VGrooveCutterPreset>('90');
   const [vGrooveDisplayMode, setVGrooveDisplayMode] = useState<VGrooveDisplayMode>('centerLines');
   const [showVGroovePreview, setShowVGroovePreview] = useState(true);
-  const [showGrooveVectors, setShowGrooveVectors] = useState(false);
   const [project, setProject] = useState<GemProject>({
     version: 1,
     sourceGeometry: createPlaceholderGemGeometry(),
@@ -499,7 +497,6 @@ export function App() {
               vGrooveSettings={vGrooveSettings}
               vGrooveDisplayMode={vGrooveDisplayMode}
               showVGroovePreview={showVGroovePreview && cutOperationState.status !== 'running'}
-              showGrooveVectors={showGrooveVectors}
               facetDebugColors={facetDebugColors}
               hoveredFacetId={hoveredFacetId}
               selectedFacetId={selectedFacetId}
@@ -510,7 +507,6 @@ export function App() {
               activeTool="select"
               gridSnap="off"
               selectedSegmentId={undefined}
-              showOutsideFacet={showOutsidePattern}
               snapEnabled={false}
               radialSymmetryEnabled={false}
               radialSymmetryOrder={1}
@@ -536,24 +532,20 @@ export function App() {
                 gemViewMode={gemViewMode}
                 placement={patternPlacement}
                 patternPrimitiveCount={designPattern.primitives.length}
-                showOutsidePattern={showOutsidePattern}
                 vGrooveSettings={vGrooveSettings}
                 vGrooveCutterPreset={vGrooveCutterPreset}
                 vGrooveDisplayMode={vGrooveDisplayMode}
                 showVGroovePreview={showVGroovePreview}
-                showGrooveVectors={showGrooveVectors}
                 cutOperationState={cutOperationState}
                 onEnvironmentPresetChange={setEnvironmentPreset}
                 onCleanRenderChange={setCleanRender}
                 onMaterialChange={setGemMaterial}
                 onGemViewModeChange={setGemViewMode}
                 onPlacementChange={setPatternPlacement}
-                onShowOutsidePatternChange={setShowOutsidePattern}
                 onVGrooveSettingsChange={setVGrooveSettings}
                 onVGrooveCutterPresetChange={setVGrooveCutterPreset}
                 onVGrooveDisplayModeChange={setVGrooveDisplayMode}
                 onShowVGroovePreviewChange={setShowVGroovePreview}
-                onShowGrooveVectorsChange={setShowGrooveVectors}
                 onCenterPattern={centerPatternOnFacet}
                 onCreateCuts={createCuts}
                 onFitPatternToFacet={fitPatternToFacet}

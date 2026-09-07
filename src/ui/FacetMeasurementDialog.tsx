@@ -17,7 +17,10 @@ interface FacetMeasurementDialogProps {
   readonly onClose: () => void;
 }
 
-type MeasurementTool = 'move' | 'measure';
+type MeasurementTool = 'move' | 'circle' | 'measure';
+type MeasurementDrag =
+  | { readonly type: 'image'; readonly pointerId: number; readonly x: number; readonly y: number; readonly panX: number; readonly panY: number }
+  | { readonly type: 'circle'; readonly pointerId: number; readonly x: number; readonly y: number; readonly centerX: number; readonly centerY: number };
 
 export function FacetMeasurementDialog({
   facetId,
@@ -26,13 +29,14 @@ export function FacetMeasurementDialog({
   onClose,
 }: FacetMeasurementDialogProps) {
   const viewportRef = useRef<HTMLDivElement>(null);
-  const dragRef = useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number } | undefined>(undefined);
+  const dragRef = useRef<MeasurementDrag | undefined>(undefined);
   const [imageUrl, setImageUrl] = useState<string>();
   const [imageSize, setImageSize] = useState<{ width: number; height: number }>();
   const [imageZoom, setImageZoom] = useState(1);
   const [imagePan, setImagePan] = useState({ x: 0, y: 0 });
   const [referenceDiameterMm, setReferenceDiameterMm] = useState(10);
   const [referenceDiameterPx, setReferenceDiameterPx] = useState(180);
+  const [referenceCenter, setReferenceCenter] = useState<MeasurementPoint>();
   const [tool, setTool] = useState<MeasurementTool>('move');
   const [points, setPoints] = useState<MeasurementPoint[]>([]);
 
@@ -66,6 +70,7 @@ export function FacetMeasurementDialog({
       setImageSize(undefined);
       setImageZoom(1);
       setImagePan({ x: 0, y: 0 });
+      setReferenceCenter(undefined);
       setPoints([]);
     });
     reader.readAsDataURL(file);
@@ -76,6 +81,8 @@ export function FacetMeasurementDialog({
     if (!measuredLengthMm || !imageUrl || !imageSize || !rect || rect.width <= 0 || rect.height <= 0) {
       return;
     }
+    const circleCenter = referenceCenter ?? { x: rect.width / 2, y: rect.height / 2 };
+    const imageCenter = { x: rect.width / 2 + imagePan.x, y: rect.height / 2 + imagePan.y };
     onApply({
       measuredLengthMm,
       referenceImage: createPatternReferenceImage({
@@ -85,7 +92,7 @@ export function FacetMeasurementDialog({
         viewportWidth: rect.width,
         viewportHeight: rect.height,
         imageZoom,
-        imagePan,
+        imagePan: { x: imageCenter.x - circleCenter.x, y: imageCenter.y - circleCenter.y },
         referenceDiameterMm,
         referenceDiameterPx,
       }),
@@ -122,23 +129,30 @@ export function FacetMeasurementDialog({
                 return;
               }
               event.currentTarget.setPointerCapture(event.pointerId);
-              dragRef.current = {
-                pointerId: event.pointerId,
-                x: event.clientX,
-                y: event.clientY,
-                panX: imagePan.x,
-                panY: imagePan.y,
-              };
+              if (tool === 'circle') {
+                const rect = event.currentTarget.getBoundingClientRect();
+                const center = referenceCenter ?? { x: rect.width / 2, y: rect.height / 2 };
+                dragRef.current = { type: 'circle', pointerId: event.pointerId, x: event.clientX, y: event.clientY, centerX: center.x, centerY: center.y };
+              } else {
+                dragRef.current = { type: 'image', pointerId: event.pointerId, x: event.clientX, y: event.clientY, panX: imagePan.x, panY: imagePan.y };
+              }
             }}
             onPointerMove={(event) => {
               const drag = dragRef.current;
               if (!drag || drag.pointerId !== event.pointerId) {
                 return;
               }
-              setImagePan({
-                x: drag.panX + event.clientX - drag.x,
-                y: drag.panY + event.clientY - drag.y,
-              });
+              if (drag.type === 'circle') {
+                setReferenceCenter({
+                  x: drag.centerX + event.clientX - drag.x,
+                  y: drag.centerY + event.clientY - drag.y,
+                });
+              } else {
+                setImagePan({
+                  x: drag.panX + event.clientX - drag.x,
+                  y: drag.panY + event.clientY - drag.y,
+                });
+              }
             }}
             onPointerUp={(event) => {
               if (dragRef.current?.pointerId === event.pointerId) {
@@ -159,7 +173,7 @@ export function FacetMeasurementDialog({
               <div className="measurementPlaceholder">Load a photograph containing a circular reference.</div>
             )}
             <svg className="measurementOverlay" aria-label="Reference circle and facet measurement">
-              <circle cx="50%" cy="50%" r={referenceDiameterPx / 2} className="measurementReferenceCircle" />
+              <circle cx={referenceCenter?.x ?? '50%'} cy={referenceCenter?.y ?? '50%'} r={referenceDiameterPx / 2} className="measurementReferenceCircle" />
               {points.length === 2 ? (
                 <line x1={points[0].x} y1={points[0].y} x2={points[1].x} y2={points[1].y} className="measurementLine" />
               ) : null}
@@ -174,12 +188,13 @@ export function FacetMeasurementDialog({
             </label>
             <div className="patternControls" role="group" aria-label="Measurement tool">
               <button className={tool === 'move' ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setTool('move')}>Move photo</button>
+              <button className={tool === 'circle' ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setTool('circle')}>Move circle</button>
               <button className={tool === 'measure' ? 'toolbarButton active' : 'toolbarButton'} disabled={!imageUrl} onClick={() => setTool('measure')}>Measure</button>
             </div>
             <RangeControl label="Photo scale" value={imageZoom} min={0.2} max={5} step={0.01} onChange={setImageZoom} />
             <NumberControl label="Reference diameter" value={referenceDiameterMm} min={0.001} step={0.1} suffix="mm" onChange={setReferenceDiameterMm} />
             <RangeControl label="Virtual circle" value={referenceDiameterPx} min={40} max={520} step={1} suffix="px" onChange={setReferenceDiameterPx} />
-            <p className="measurementHint">Move and scale the photo until its reference circle matches the virtual circle. Then choose Measure and mark both ends of the real facet.</p>
+            <p className="measurementHint">Move the photo and virtual circle independently until both circles match. Then choose Measure and mark both ends of the real facet.</p>
             <dl className="measurementResult">
               <dt>Measured facet</dt>
               <dd>{measuredLengthMm ? `${measuredLengthMm.toFixed(3)} mm` : 'Select two points'}</dd>

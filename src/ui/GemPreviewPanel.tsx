@@ -20,24 +20,20 @@ interface GemPreviewPanelProps {
   readonly gemViewMode: 'setup' | 'render';
   readonly placement?: PatternPlacement;
   readonly patternPrimitiveCount: number;
-  readonly showOutsidePattern: boolean;
   readonly vGrooveSettings: VGrooveSettings;
   readonly vGrooveCutterPreset: VGrooveCutterPreset;
   readonly vGrooveDisplayMode: VGrooveDisplayMode;
   readonly showVGroovePreview: boolean;
-  readonly showGrooveVectors: boolean;
   readonly cutOperationState: { readonly status: 'idle' | 'running' | 'success' | 'error'; readonly message?: string };
   readonly onEnvironmentPresetChange: (environment: GemEnvironmentPreset) => void;
   readonly onCleanRenderChange: (enabled: boolean) => void;
   readonly onMaterialChange: (material: GemMaterial) => void;
   readonly onGemViewModeChange: (mode: 'setup' | 'render') => void;
   readonly onPlacementChange: (placement: PatternPlacement) => void;
-  readonly onShowOutsidePatternChange: (enabled: boolean) => void;
   readonly onVGrooveSettingsChange: (settings: VGrooveSettings) => void;
   readonly onVGrooveCutterPresetChange: (preset: VGrooveCutterPreset) => void;
   readonly onVGrooveDisplayModeChange: (mode: VGrooveDisplayMode) => void;
   readonly onShowVGroovePreviewChange: (enabled: boolean) => void;
-  readonly onShowGrooveVectorsChange: (enabled: boolean) => void;
   readonly onCenterPattern: () => void;
   readonly onCreateCuts: () => void;
   readonly onFitPatternToFacet: () => void;
@@ -54,24 +50,20 @@ export function GemPreviewPanel({
   gemViewMode,
   placement,
   patternPrimitiveCount,
-  showOutsidePattern,
   vGrooveSettings,
   vGrooveCutterPreset,
   vGrooveDisplayMode,
   showVGroovePreview,
-  showGrooveVectors,
   cutOperationState,
   onEnvironmentPresetChange,
   onCleanRenderChange,
   onMaterialChange,
   onGemViewModeChange,
   onPlacementChange,
-  onShowOutsidePatternChange,
   onVGrooveSettingsChange,
   onVGrooveCutterPresetChange,
   onVGrooveDisplayModeChange,
   onShowVGroovePreviewChange,
-  onShowGrooveVectorsChange,
   onCenterPattern,
   onCreateCuts,
   onFitPatternToFacet,
@@ -114,17 +106,6 @@ export function GemPreviewPanel({
         Color
         <input type="color" value={material.color} onChange={(event) => onMaterialChange({ ...material, id: 'custom', name: 'Custom', color: event.target.value })} />
       </label>
-      <label className="numberRow">
-        Transmission
-        <input
-          type="range"
-          min="0"
-          max="1"
-          step="0.01"
-          value={material.transmission}
-          onChange={(event) => onMaterialChange({ ...material, id: 'custom', name: 'Custom', transmission: Number(event.target.value) })}
-        />
-      </label>
       <h3>Lighting</h3>
       <label className="numberRow">
         Environment
@@ -157,7 +138,7 @@ export function GemPreviewPanel({
       </div>
       <label className="wireframeToggle">
         <input type="checkbox" checked={cleanRender} onChange={(event) => onCleanRenderChange(event.target.checked)} />
-        Clean Render
+        Clean View
       </label>
 
       <h3>Pattern On Facet</h3>
@@ -181,10 +162,6 @@ export function GemPreviewPanel({
               Fit to facet
             </button>
           </div>
-          <label className="wireframeToggle">
-            <input type="checkbox" checked={showOutsidePattern} onChange={(event) => onShowOutsidePatternChange(event.target.checked)} />
-            Show outside facet
-          </label>
         </>
       ) : (
         <p>Create a 2D pattern and select a facet to place it.</p>
@@ -226,22 +203,27 @@ export function GemPreviewPanel({
       <NumberInput
         label="Depth"
         value={vGrooveSettings.depthMm}
-        min={0.01}
-          max={0.1}
-        step={0.01}
-          onChange={(depthMm) => onVGrooveSettingsChange({ ...vGrooveSettings, depthMm: Math.min(0.1, Math.max(0.01, depthMm)) })}
+        min={0.001}
+        max={5}
+        step={0.001}
+        onChange={(depthMm) => onVGrooveSettingsChange({ ...vGrooveSettings, depthMm: clampDepth(depthMm) })}
       />
       <label className="numberRow">
         Depth
         <input
           type="range"
-          min="0.01"
-          max="0.1"
-          step="0.01"
+          min="0.001"
+          max="5"
+          step="0.001"
           value={vGrooveSettings.depthMm}
+          onWheel={(event) => {
+            event.preventDefault();
+            const direction = event.deltaY < 0 ? 1 : -1;
+            onVGrooveSettingsChange({ ...vGrooveSettings, depthMm: clampDepth(vGrooveSettings.depthMm + direction * 0.001) });
+          }}
           onChange={(event) => onVGrooveSettingsChange({
             ...vGrooveSettings,
-            depthMm: Math.min(0.1, Math.max(0.01, Number(event.target.value))),
+            depthMm: clampDepth(Number(event.target.value)),
           })}
         />
       </label>
@@ -261,10 +243,6 @@ export function GemPreviewPanel({
         <input type="checkbox" checked={showVGroovePreview} onChange={(event) => onShowVGroovePreviewChange(event.target.checked)} />
         Preview cuts
       </label>
-      <label className="wireframeToggle">
-        <input type="checkbox" checked={showGrooveVectors} onChange={(event) => onShowGrooveVectorsChange(event.target.checked)} />
-        Groove vectors
-      </label>
       <div className="patternControls">
         <button className="toolbarButton" disabled={!placement || patternPrimitiveCount === 0 || cutOperationState.status === 'running'} onClick={onCreateCuts}>
           {cutOperationState.status === 'running' ? 'Creating cuts...' : 'Create Cuts'}
@@ -276,6 +254,10 @@ export function GemPreviewPanel({
       {cutOperationState.message ? <p aria-live="polite">{cutOperationState.message}</p> : null}
     </aside>
   );
+}
+
+function clampDepth(value: number) {
+  return Math.round(Math.min(5, Math.max(0.001, value)) * 1000) / 1000;
 }
 
 function NumberInput({
