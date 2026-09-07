@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { createPlaceholderGemGeometry } from './createPlaceholderGemGeometry';
 import {
   calculateFacetBoundarySpanMm,
+  calculateMaximumMeasurementSpan,
   calculateMeasuredLengthMm,
   calculateMeasurementScaleFactor,
   scaleGemGeometry,
@@ -14,6 +15,19 @@ describe('FacetMeasurement', () => {
 
   it('calculates the uniform scale required by a measured facet', () => {
     expect(calculateMeasurementScaleFactor(15, 10)).toBeCloseTo(1.5);
+  });
+
+  it('finds the longest span across every pair of polygon vertices', () => {
+    const span = calculateMaximumMeasurementSpan([
+      { x: -2, y: 0 },
+      { x: 0, y: 1 },
+      { x: 3, y: 0 },
+      { x: 0, y: -1 },
+    ]);
+
+    expect(span.start).toEqual({ x: -2, y: 0 });
+    expect(span.end).toEqual({ x: 3, y: 0 });
+    expect(span.lengthMm).toBeCloseTo(5);
   });
 
   it('uniformly scales the mesh and preserves topology', () => {

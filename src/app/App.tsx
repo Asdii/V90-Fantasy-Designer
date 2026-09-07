@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPlaceholderGemGeometry } from '../geometry/createPlaceholderGemGeometry';
 import {
-  calculateFacetBoundarySpanMm,
+  calculateMaximumMeasurementSpan,
   calculateMeasurementScaleFactor,
 } from '../geometry/FacetMeasurement';
 import { createFacetLocalGeometry } from '../geometry/FacetLocalGeometry';
@@ -125,9 +125,13 @@ export function App() {
     if (!facet) {
       return undefined;
     }
+    const localGeometry = createFacetLocalGeometry(project.geometry, facet);
+    const boundary = localGeometry.boundary.map((point) => ({ x: point.u, y: point.v }));
+    const maximumSpan = calculateMaximumMeasurementSpan(boundary);
     return {
       id: facet.id,
-      lengthMm: calculateFacetBoundarySpanMm(project.geometry, facet),
+      lengthMm: maximumSpan.lengthMm,
+      guide: { boundary, maximumSpan },
     };
   }, [project.geometry, selectedFacetId]);
 
@@ -621,6 +625,7 @@ export function App() {
         <FacetMeasurementDialog
           facetId={measurementFacet.id}
           modelFacetLengthMm={measurementFacet.lengthMm}
+          facetGuide={measurementFacet.guide}
           onApply={applyFacetMeasurement}
           onClose={() => setShowFacetMeasurement(false)}
         />

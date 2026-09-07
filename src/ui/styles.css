@@ -868,6 +868,61 @@ select {
   border-left: 1px solid #343b43;
 }
 
+.measurementFacetGuide {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 112px;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 9px;
+  border: 1px solid #343b43;
+  border-radius: 6px;
+  background: #11161b;
+}
+
+.measurementFacetGuide strong,
+.measurementFacetGuide span {
+  display: block;
+}
+
+.measurementFacetGuide strong {
+  margin-bottom: 5px;
+  color: #f0f3f6;
+  font-size: 12px;
+}
+
+.measurementFacetGuide span {
+  color: #9da7b1;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.measurementFacetGuide svg {
+  width: 112px;
+  height: 86px;
+  overflow: visible;
+}
+
+.measurementFacetGuide polygon {
+  fill: #27333e;
+  stroke: #8ca0b1;
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
+
+.measurementFacetGuide line {
+  stroke: #1cc2ef;
+  stroke-width: 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.measurementFacetGuide circle {
+  fill: #f7f9fb;
+  stroke: #087da9;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
 .measurementFileButton {
   width: 100%;
   margin-bottom: 12px;

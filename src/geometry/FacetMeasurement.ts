@@ -7,6 +7,12 @@ export interface MeasurementPoint {
   readonly y: number;
 }
 
+export interface MeasurementSpan {
+  readonly start: MeasurementPoint;
+  readonly end: MeasurementPoint;
+  readonly lengthMm: number;
+}
+
 export const MEASUREMENT_PIXELS_PER_MM = 18;
 
 export function calculateMeasuredLengthMm(
@@ -21,15 +27,38 @@ export function calculateMeasuredLengthMm(
 }
 
 export function calculateFacetBoundarySpanMm(geometry: GemGeometry, facet: Facet): number {
+  const points = facet.boundaryVertexIndices.map((index) => geometry.vertices[index]);
   let maximum = 0;
-  for (let first = 0; first < facet.boundaryVertexIndices.length; first += 1) {
-    const a = geometry.vertices[facet.boundaryVertexIndices[first]];
-    for (let second = first + 1; second < facet.boundaryVertexIndices.length; second += 1) {
-      const b = geometry.vertices[facet.boundaryVertexIndices[second]];
+  for (let first = 0; first < points.length; first += 1) {
+    for (let second = first + 1; second < points.length; second += 1) {
+      const a = points[first];
+      const b = points[second];
       maximum = Math.max(maximum, Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z));
     }
   }
   return maximum;
+}
+
+/** Returns the largest point-to-point span of a planar facet boundary. */
+export function calculateMaximumMeasurementSpan(points: readonly MeasurementPoint[]): MeasurementSpan {
+  if (points.length < 2) {
+    throw new Error('A facet boundary needs at least two points to measure its maximum span.');
+  }
+
+  let start = points[0];
+  let end = points[1];
+  let lengthMm = Math.hypot(end.x - start.x, end.y - start.y);
+  for (let first = 0; first < points.length; first += 1) {
+    for (let second = first + 1; second < points.length; second += 1) {
+      const candidate = Math.hypot(points[second].x - points[first].x, points[second].y - points[first].y);
+      if (candidate > lengthMm) {
+        start = points[first];
+        end = points[second];
+        lengthMm = candidate;
+      }
+    }
+  }
+  return { start, end, lengthMm };
 }
 
 export function calculateMeasurementScaleFactor(measuredLengthMm: number, modelLengthMm: number): number {

@@ -3,6 +3,7 @@ import {
   calculateMeasuredLengthMm,
   MEASUREMENT_PIXELS_PER_MM,
   type MeasurementPoint,
+  type MeasurementSpan,
 } from '../geometry/FacetMeasurement';
 import {
   createPatternReferenceImage,
@@ -17,8 +18,14 @@ export interface FacetMeasurementResult {
 interface FacetMeasurementDialogProps {
   readonly facetId: number;
   readonly modelFacetLengthMm: number;
+  readonly facetGuide: FacetMeasurementGuide;
   readonly onApply: (result: FacetMeasurementResult) => void;
   readonly onClose: () => void;
+}
+
+export interface FacetMeasurementGuide {
+  readonly boundary: readonly MeasurementPoint[];
+  readonly maximumSpan: MeasurementSpan;
 }
 
 type MeasurementTool = 'move' | 'circle' | 'measure';
@@ -29,6 +36,7 @@ type MeasurementDrag =
 export function FacetMeasurementDialog({
   facetId,
   modelFacetLengthMm,
+  facetGuide,
   onApply,
   onClose,
 }: FacetMeasurementDialogProps) {
@@ -114,7 +122,7 @@ export function FacetMeasurementDialog({
         <header className="cutHelperHeader">
           <div>
             <h2 id="measurement-title">Measure Facet</h2>
-            <p>Facet {facetId} · model span {modelFacetLengthMm.toFixed(3)} mm</p>
+            <p>Facet {facetId} · maximum span {modelFacetLengthMm.toFixed(3)} mm</p>
           </div>
           <button className="toolbarButton" onClick={onClose}>Close</button>
         </header>
@@ -186,6 +194,7 @@ export function FacetMeasurementDialog({
           </div>
 
           <aside className="measurementControls">
+            <FacetSpanGuide guide={facetGuide} />
             <label className="fileButton toolbarButton measurementFileButton">
               Load photo
               <input type="file" accept="image/*" onChange={(event) => handleImage(event.target.files?.[0])} />
@@ -197,11 +206,11 @@ export function FacetMeasurementDialog({
             </div>
             <RangeControl label="Photo scale" value={imageZoom} min={0.2} max={5} step={0.01} onChange={setImageZoom} />
             <RangeControl label="Virtual circle diameter" value={referenceDiameterMm} min={1} max={30} step={0.1} suffix="mm" onChange={setReferenceDiameterMm} />
-            <p className="measurementHint">Move the photo and virtual circle independently until both circles match. Then choose Measure and mark both ends of the real facet.</p>
+            <p className="measurementHint">Match the virtual circle to the photo reference. Then choose Measure and mark the two ends of the highlighted maximum facet span.</p>
             <dl className="measurementResult">
-              <dt>Measured facet</dt>
+              <dt>Measured maximum span</dt>
               <dd>{measuredLengthMm ? `${measuredLengthMm.toFixed(3)} mm` : 'Select two points'}</dd>
-              <dt>Model facet</dt>
+              <dt>Model maximum span</dt>
               <dd>{modelFacetLengthMm.toFixed(3)} mm</dd>
               <dt>Scale factor</dt>
               <dd>{measuredLengthMm ? (measuredLengthMm / modelFacetLengthMm).toFixed(6) : '—'}</dd>
@@ -220,6 +229,39 @@ export function FacetMeasurementDialog({
         </div>
       </section>
     </div>
+  );
+}
+
+function FacetSpanGuide({ guide }: { readonly guide: FacetMeasurementGuide }) {
+  const bounds = guide.boundary.reduce((result, point) => ({
+    minX: Math.min(result.minX, point.x),
+    maxX: Math.max(result.maxX, point.x),
+    minY: Math.min(result.minY, point.y),
+    maxY: Math.max(result.maxY, point.y),
+  }), { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity });
+  const width = Math.max(bounds.maxX - bounds.minX, 0.001);
+  const height = Math.max(bounds.maxY - bounds.minY, 0.001);
+  const padding = Math.max(width, height) * 0.16;
+  const viewBox = `${bounds.minX - padding} ${-bounds.maxY - padding} ${width + padding * 2} ${height + padding * 2}`;
+
+  return (
+    <section className="measurementFacetGuide" aria-label="Longest facet span guide">
+      <div>
+        <strong>Measure this span</strong>
+        <span>{guide.maximumSpan.lengthMm.toFixed(3)} mm in the current model</span>
+      </div>
+      <svg viewBox={viewBox} preserveAspectRatio="xMidYMid meet" role="img" aria-label="Selected facet with its longest span highlighted">
+        <polygon points={guide.boundary.map((point) => `${point.x},${-point.y}`).join(' ')} />
+        <line
+          x1={guide.maximumSpan.start.x}
+          y1={-guide.maximumSpan.start.y}
+          x2={guide.maximumSpan.end.x}
+          y2={-guide.maximumSpan.end.y}
+        />
+        <circle cx={guide.maximumSpan.start.x} cy={-guide.maximumSpan.start.y} r={Math.max(width, height) * 0.025} />
+        <circle cx={guide.maximumSpan.end.x} cy={-guide.maximumSpan.end.y} r={Math.max(width, height) * 0.025} />
+      </svg>
+    </section>
   );
 }
 
