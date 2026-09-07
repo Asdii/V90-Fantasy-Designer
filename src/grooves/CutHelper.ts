@@ -1,4 +1,5 @@
 import type { FacetLocalGeometry } from '../geometry/FacetLocalGeometry';
+import { localToWorld, worldToLocal } from '../geometry/CoordinateTransforms';
 import type { LineSegment2D } from '../patterns/Pattern';
 import { clipSegmentToFacetPolygon } from '../patterns/PatternClipping';
 import type { DesignPattern } from '../patterns/model/PatternModel';
@@ -45,6 +46,21 @@ export function createCutInstructions(
     }));
 }
 
+export function rebaseCutInstruction(
+  instruction: CutInstruction,
+  sourceGeometry: FacetLocalGeometry,
+  referenceGeometry: FacetLocalGeometry,
+): CutInstruction {
+  const segment = rebaseSegment(instruction.segment, sourceGeometry, referenceGeometry);
+  return {
+    ...instruction,
+    angleDeg: calculateCutAngleDeg(segment),
+    distanceFromCenterMm: calculateLineDistanceFromOriginMm(segment),
+    segment,
+    visibleSegments: instruction.visibleSegments.map((visible) => rebaseSegment(visible, sourceGeometry, referenceGeometry)),
+  };
+}
+
 /** Direction from segment start to end, measured counter-clockwise from local +X. */
 export function calculateCutAngleDeg(segment: LineSegment2D): number {
   const angle = (Math.atan2(segment.end.v - segment.start.v, segment.end.u - segment.start.u) * 180) / Math.PI;
@@ -65,4 +81,26 @@ export function calculateLineDistanceFromOriginMm(segment: LineSegment2D): numbe
 
 function segmentLength(segment: LineSegment2D) {
   return Math.hypot(segment.end.u - segment.start.u, segment.end.v - segment.start.v);
+}
+
+function rebaseSegment(
+  segment: LineSegment2D,
+  sourceGeometry: FacetLocalGeometry,
+  referenceGeometry: FacetLocalGeometry,
+): LineSegment2D {
+  return {
+    ...segment,
+    start: rebasePoint(segment.start, sourceGeometry, referenceGeometry),
+    end: rebasePoint(segment.end, sourceGeometry, referenceGeometry),
+  };
+}
+
+function rebasePoint(
+  point: LineSegment2D['start'],
+  sourceGeometry: FacetLocalGeometry,
+  referenceGeometry: FacetLocalGeometry,
+) {
+  const world = localToWorld(sourceGeometry.frame, point.u, point.v);
+  const local = worldToLocal(referenceGeometry.frame, world);
+  return { u: local.u, v: local.v };
 }

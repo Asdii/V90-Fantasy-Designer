@@ -25,6 +25,7 @@ interface GemPreviewPanelProps {
   readonly vGrooveDisplayMode: VGrooveDisplayMode;
   readonly showVGroovePreview: boolean;
   readonly cutOperationState: { readonly status: 'idle' | 'running' | 'success' | 'error'; readonly message?: string };
+  readonly cutPlaneReferenceFacetId?: number;
   readonly onEnvironmentPresetChange: (environment: GemEnvironmentPreset) => void;
   readonly onCleanRenderChange: (enabled: boolean) => void;
   readonly onMaterialChange: (material: GemMaterial) => void;
@@ -55,6 +56,7 @@ export function GemPreviewPanel({
   vGrooveDisplayMode,
   showVGroovePreview,
   cutOperationState,
+  cutPlaneReferenceFacetId,
   onEnvironmentPresetChange,
   onCleanRenderChange,
   onMaterialChange,
@@ -171,6 +173,8 @@ export function GemPreviewPanel({
       <dl>
         <dt>Operations</dt>
         <dd>{project.cutOperations.length}</dd>
+        <dt>Cut plane</dt>
+        <dd>{cutPlaneReferenceFacetId === undefined ? 'Set by first cut' : `Facet ${cutPlaneReferenceFacetId} angle`}</dd>
       </dl>
       <label className="numberRow">
         Cutter

@@ -11,6 +11,7 @@ import {
   calculateVGrooveDimensions,
   createCutInstructions,
   defaultVGrooveSettings,
+  rebaseCutInstruction,
   type VGrooveCutterPreset,
   type VGrooveDisplayMode,
   type VGrooveSettings,
@@ -18,6 +19,7 @@ import {
 import { gemMaterialPresets, type GemMaterial } from '../materials/GemMaterial';
 import type { GemProject } from '../project/GemProject';
 import { rebuildWorkingGemGeometry } from '../project/CutOperations';
+import { areCutPlaneNormalsCompatible } from '../project/CutPlaneLock';
 import { scaleGemProject } from '../project/scaleGemProject';
 import type { Pattern } from '../patterns/Pattern';
 import { createEmptyDesignPattern, type DesignPattern } from '../patterns/model/PatternModel';
@@ -95,16 +97,24 @@ export function App() {
 
   latestProjectRef.current = project;
 
-  const cutHelperSteps = useMemo(() => project.cutOperations.flatMap((operation, operationIndex) =>
-    operation.cutHelper.instructions.map((instruction) => ({
-      operationId: operation.id,
-      operationNumber: operationIndex + 1,
-      facetId: operation.facetId,
-      localGeometry: operation.cutHelper.localGeometry,
-      instruction,
-      grooveWidthMm: operation.cutHelper.grooveWidthMm,
-    })),
-  ), [project.cutOperations]);
+  const cutHelperSteps = useMemo(() => {
+    const referenceOperation = project.cutOperations[0];
+    if (!referenceOperation) {
+      return [];
+    }
+
+    const referenceGeometry = referenceOperation.cutHelper.localGeometry;
+    return project.cutOperations.flatMap((operation, operationIndex) =>
+      operation.cutHelper.instructions.map((instruction) => ({
+        operationId: operation.id,
+        operationNumber: operationIndex + 1,
+        facetId: referenceOperation.facetId,
+        localGeometry: referenceGeometry,
+        instruction: rebaseCutInstruction(instruction, operation.cutHelper.localGeometry, referenceGeometry),
+        grooveWidthMm: operation.cutHelper.grooveWidthMm,
+      })),
+    );
+  }, [project.cutOperations]);
   const measurementFacet = useMemo(() => {
     if (!project.geometry || selectedFacetId === undefined) {
       return undefined;
@@ -238,6 +248,25 @@ export function App() {
     setShowFacetMeasurement(false);
   };
 
+  const selectFacet = useCallback((facetId: number | undefined) => {
+    if (facetId === undefined) {
+      setSelectedFacetId(undefined);
+      return;
+    }
+
+    const referenceOperation = project.cutOperations[0];
+    const facet = project.geometry?.facets.find((candidate) => candidate.id === facetId);
+    if (referenceOperation && facet && !areCutPlaneNormalsCompatible(referenceOperation.facetNormal, facet.normal)) {
+      const message = `Cut plane is locked to the angle of Facet ${referenceOperation.facetId}. Select a facet with the same angle.`;
+      setImportError(message);
+      setCutOperationState({ status: 'error', message });
+      return;
+    }
+
+    setImportError(undefined);
+    setSelectedFacetId(facetId);
+  }, [project.cutOperations, project.geometry]);
+
   const applyFacetMeasurement = ({ measuredLengthMm, referenceImage }: FacetMeasurementResult) => {
     if (!measurementFacet || measurementFacet.lengthMm <= 0 || cutOperationInProgressRef.current) {
       return;
@@ -297,6 +326,14 @@ export function App() {
     const facet = project.geometry.facets.find((item) => item.id === selectedFacetId);
     if (!facet) {
       setImportError('Cannot create cuts: selected facet no longer exists.');
+      return;
+    }
+
+    const referenceOperation = project.cutOperations[0];
+    if (referenceOperation && !areCutPlaneNormalsCompatible(referenceOperation.facetNormal, facet.normal)) {
+      const message = `Cannot create cuts: Facet ${selectedFacetId} does not match the locked angle of Facet ${referenceOperation.facetId}.`;
+      setImportError(message);
+      setCutOperationState({ status: 'error', message });
       return;
     }
 
@@ -517,7 +554,7 @@ export function App() {
               onLocalCursorChange={() => undefined}
               onObjectCountChange={setObjectCount}
               onFpsChange={setFps}
-              onSelectedFacetChange={setSelectedFacetId}
+              onSelectedFacetChange={selectFacet}
               onSelectedSegmentChange={() => undefined}
               onRendererError={handleRendererError}
             />
@@ -537,6 +574,7 @@ export function App() {
                 vGrooveDisplayMode={vGrooveDisplayMode}
                 showVGroovePreview={showVGroovePreview}
                 cutOperationState={cutOperationState}
+                cutPlaneReferenceFacetId={project.cutOperations[0]?.facetId}
                 onEnvironmentPresetChange={setEnvironmentPreset}
                 onCleanRenderChange={setCleanRender}
                 onMaterialChange={setGemMaterial}

@@ -23,8 +23,8 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
   const activeStep = steps[activeIndex];
   const instruction = activeStep?.instruction;
   const viewport = useMemo(
-    () => activeStep ? createViewport(activeStep.localGeometry, activeStep.grooveWidthMm) : undefined,
-    [activeStep],
+    () => activeStep ? createViewport(activeStep.localGeometry, steps) : undefined,
+    [activeStep, steps],
   );
   const wheelTicks = useMemo(() => viewport ? createAngleTicks(viewport.wheelRadius) : [], [viewport]);
 
@@ -53,9 +53,7 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [steps.length, onClose]);
 
-  const completedInOperation = activeStep
-    ? steps.slice(0, activeIndex).filter((step) => step.operationId === activeStep.operationId)
-    : [];
+  const completedSteps = activeStep ? steps.slice(0, activeIndex) : [];
 
   return (
     <div
@@ -70,7 +68,7 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
         <header className="cutHelperHeader">
           <div>
             <h2 id="cut-helper-title">Cut Helper</h2>
-            <p>{activeStep ? `Operation ${activeStep.operationNumber} · Facet ${activeStep.facetId}` : 'Completed cutting sequence'}</p>
+            <p>{activeStep ? `Operation ${activeStep.operationNumber} · Reference facet ${activeStep.facetId}` : 'Completed cutting sequence'}</p>
           </div>
           <div className="cutHelperHeaderActions">
             <button className="toolbarButton" disabled={!instruction} onClick={() => setOrientationDeg(instruction ? instruction.angleDeg : 0)}>Orient to cut</button>
@@ -108,7 +106,7 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
                 <line x1="0" y1={viewport.y} x2="0" y2={viewport.y + viewport.height} className="cutHelperAxis cutHelperAxisY" />
                 <polygon points={activeStep.localGeometry.boundary.map((point) => `${point.u},${-point.v}`).join(' ')} className="cutHelperFacet" />
 
-                {completedInOperation.flatMap((completed) => completed.instruction.visibleSegments.map((segment) => (
+                {completedSteps.flatMap((completed) => completed.instruction.visibleSegments.map((segment) => (
                   <line
                     key={`completed-${completed.operationId}-${completed.instruction.step}-${segment.id}`}
                     x1={segment.start.u} y1={-segment.start.v}
@@ -168,10 +166,22 @@ function Metric({ label, value }: { readonly label: string; readonly value: stri
   );
 }
 
-function createViewport(localGeometry: FacetLocalGeometry, grooveWidthMm: number) {
+function createViewport(localGeometry: FacetLocalGeometry, steps: readonly CutHelperStep[]) {
   const diagonal = Math.max(Math.hypot(localGeometry.bounds.width, localGeometry.bounds.height), 0.5);
   const facetRadius = Math.max(...localGeometry.boundary.map((point) => Math.hypot(point.u, point.v)), diagonal / 2);
-  const wheelRadius = Math.max(facetRadius * 1.18, facetRadius + grooveWidthMm * 3, 0.5);
+  const cutRadius = steps.reduce((maximum, step) => {
+    const visibleSegments = step.instruction.visibleSegments.length > 0
+      ? step.instruction.visibleSegments
+      : [step.instruction.segment];
+    return visibleSegments.reduce((segmentMaximum, segment) => Math.max(
+      segmentMaximum,
+      Math.hypot(segment.start.u, segment.start.v),
+      Math.hypot(segment.end.u, segment.end.v),
+    ), maximum);
+  }, 0);
+  const widestGroove = steps.reduce((maximum, step) => Math.max(maximum, step.grooveWidthMm), 0);
+  const contentRadius = Math.max(facetRadius, cutRadius);
+  const wheelRadius = Math.max(contentRadius * 1.18, contentRadius + widestGroove * 3, 0.5);
   const extent = wheelRadius * 1.2;
   const x = -extent;
   const y = -extent;

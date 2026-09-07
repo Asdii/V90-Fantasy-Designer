@@ -5,6 +5,7 @@ export {
   calculateCutAngleDeg,
   calculateLineDistanceFromOriginMm,
   createCutInstructions,
+  rebaseCutInstruction,
   type CutHelperSnapshot,
   type CutInstruction,
 } from './CutHelper';

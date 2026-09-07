@@ -7,6 +7,7 @@ import {
   calculateCutAngleDeg,
   calculateLineDistanceFromOriginMm,
   createCutInstructions,
+  rebaseCutInstruction,
 } from './CutHelper';
 
 describe('CutHelper', () => {
@@ -42,6 +43,30 @@ describe('CutHelper', () => {
     expect(instructions.map((instruction) => instruction.distanceFromCenterMm)).toEqual([15, 15, 15, 15]);
     expect(instructions.every((instruction) => instruction.depthMm === 0.05)).toBe(true);
     expect(instructions.every((instruction) => instruction.visibleSegments.length === 1)).toBe(true);
+  });
+
+  it('rebases a later facet instruction onto the first facet center and axes', () => {
+    const sourceBase = localGeometry(10);
+    const source = {
+      ...sourceBase,
+      frame: { ...sourceBase.frame, origin: { x: 5, y: 2, z: 0 } },
+    };
+    const reference = localGeometry(10);
+    const instruction = {
+      id: 'cut',
+      step: 1,
+      angleDeg: 0,
+      distanceFromCenterMm: 0,
+      depthMm: 0.1,
+      segment: line(-1, 0, 1, 0),
+      visibleSegments: [line(-1, 0, 1, 0)],
+    };
+
+    const rebased = rebaseCutInstruction(instruction, source, reference);
+    expect(rebased.segment.start).toEqual({ u: 4, v: 2 });
+    expect(rebased.segment.end).toEqual({ u: 6, v: 2 });
+    expect(rebased.angleDeg).toBeCloseTo(0);
+    expect(rebased.distanceFromCenterMm).toBeCloseTo(2);
   });
 });
 
