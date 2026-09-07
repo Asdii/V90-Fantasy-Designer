@@ -27,6 +27,12 @@ export interface CutHelperSnapshot {
   readonly grooveWidthMm: number;
 }
 
+export type CutHelperDirection = 'horizontal' | 'vertical';
+
+export function calculateCutHelperStageRotation(angleDeg: number, direction: CutHelperDirection) {
+  return angleDeg + (direction === 'vertical' ? -90 : 0);
+}
+
 export function createCutInstructions(
   pattern: DesignPattern,
   placement: PatternPlacement,

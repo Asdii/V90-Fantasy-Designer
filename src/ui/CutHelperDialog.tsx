@@ -1,6 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FacetLocalGeometry } from '../geometry/FacetLocalGeometry';
-import type { CutInstruction } from '../grooves';
+import {
+  calculateCutHelperStageRotation,
+  type CutHelperDirection,
+  type CutInstruction,
+} from '../grooves';
 
 export interface CutHelperStep {
   readonly operationId: string;
@@ -19,6 +23,7 @@ interface CutHelperDialogProps {
 export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const [orientationDeg, setOrientationDeg] = useState(0);
+  const [cutDirection, setCutDirection] = useState<CutHelperDirection>('horizontal');
   const activeIndex = Math.min(stepIndex, Math.max(0, steps.length - 1));
   const activeStep = steps[activeIndex];
   const instruction = activeStep?.instruction;
@@ -33,9 +38,9 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
   }, [steps.length]);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setOrientationDeg(instruction ? instruction.angleDeg : 0));
+    const frame = requestAnimationFrame(() => setOrientationDeg(instruction ? calculateCutHelperStageRotation(instruction.angleDeg, cutDirection) : 0));
     return () => cancelAnimationFrame(frame);
-  }, [activeIndex, instruction]);
+  }, [activeIndex, cutDirection, instruction]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -71,7 +76,11 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
             <p>{activeStep ? `Operation ${activeStep.operationNumber} · Reference facet ${activeStep.facetId}` : 'Completed cutting sequence'}</p>
           </div>
           <div className="cutHelperHeaderActions">
-            <button className="toolbarButton" disabled={!instruction} onClick={() => setOrientationDeg(instruction ? instruction.angleDeg : 0)}>Orient to cut</button>
+            <div className="cutHelperDirection" role="group" aria-label="Cut direction">
+              <button className={cutDirection === 'horizontal' ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setCutDirection('horizontal')}>Horizontal →</button>
+              <button className={cutDirection === 'vertical' ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setCutDirection('vertical')}>Vertical ↑</button>
+            </div>
+            <button className="toolbarButton" disabled={!instruction} onClick={() => setOrientationDeg(instruction ? calculateCutHelperStageRotation(instruction.angleDeg, cutDirection) : 0)}>Orient to cut</button>
             <button className="toolbarButton" onClick={() => setOrientationDeg(0)}>Return to 0°</button>
             <button className="toolbarButton" onClick={onClose} aria-label="Close Cut Helper">Close</button>
           </div>
@@ -83,6 +92,9 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
               <defs>
                 <marker id="cut-helper-arrow" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto" markerUnits="strokeWidth">
                   <path d="M0,0 L7,3.5 L0,7 Z" fill="#101820" />
+                </marker>
+                <marker id="cut-helper-completed-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+                  <path d="M0,0 L6,3 L0,6 Z" fill="#347b98" />
                 </marker>
               </defs>
               <rect x={viewport.x} y={viewport.y} width={viewport.width} height={viewport.height} fill="#f7f9fb" />
@@ -113,6 +125,7 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
                     x2={segment.end.u} y2={-segment.end.v}
                     className="cutHelperCompletedCut"
                     style={{ strokeWidth: Math.max(completed.grooveWidthMm, viewport.hairline * 2) }}
+                    markerEnd="url(#cut-helper-completed-arrow)"
                   />
                 )))}
 

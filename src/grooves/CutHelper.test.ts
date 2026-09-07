@@ -5,6 +5,7 @@ import type { DesignPattern, PolylinePrimitive } from '../patterns/model/Pattern
 import { createDefaultPatternPlacement } from '../patterns/placement/PatternPlacement';
 import {
   calculateCutAngleDeg,
+  calculateCutHelperStageRotation,
   calculateLineDistanceFromOriginMm,
   createCutInstructions,
   rebaseCutInstruction,
@@ -67,6 +68,11 @@ describe('CutHelper', () => {
     expect(rebased.segment.end).toEqual({ u: 6, v: 2 });
     expect(rebased.angleDeg).toBeCloseTo(0);
     expect(rebased.distanceFromCenterMm).toBeCloseTo(2);
+  });
+
+  it('orients the cutting line horizontally or vertically', () => {
+    expect(calculateCutHelperStageRotation(35, 'horizontal')).toBe(35);
+    expect(calculateCutHelperStageRotation(35, 'vertical')).toBe(-55);
   });
 });
 

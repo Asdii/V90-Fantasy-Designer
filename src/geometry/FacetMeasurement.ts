@@ -7,6 +7,8 @@ export interface MeasurementPoint {
   readonly y: number;
 }
 
+export const MEASUREMENT_PIXELS_PER_MM = 18;
+
 export function calculateMeasuredLengthMm(
   start: MeasurementPoint,
   end: MeasurementPoint,

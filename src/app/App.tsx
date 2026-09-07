@@ -44,11 +44,13 @@ import { StatusBar } from '../ui/StatusBar';
 import { Toolbar } from '../ui/Toolbar';
 import { Viewport } from '../ui/Viewport';
 
-type AppTab = 'pattern' | 'gem';
+type WorkspaceArea = 'pattern' | 'gem';
+type DesignerSize = 'small' | 'medium' | 'large';
 type CutOperationState = { readonly status: 'idle' | 'running' | 'success' | 'error'; readonly message?: string };
 
 export function App() {
-  const [activeTab, setActiveTab] = useState<AppTab>('pattern');
+  const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceArea>('pattern');
+  const [designerSize, setDesignerSize] = useState<DesignerSize>('medium');
   const [background, setBackground] = useState<BackgroundMode>('white');
   const [lightingPreset] = useState<LightingPreset>('studioLight');
   const [environmentPreset, setEnvironmentPreset] = useState<GemEnvironmentPreset>('gemStudio');
@@ -440,7 +442,7 @@ export function App() {
   };
 
   useEffect(() => {
-    if (activeTab !== 'gem') {
+    if (activeWorkspace !== 'gem') {
       return;
     }
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -454,7 +456,7 @@ export function App() {
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [activeTab, project.cutOperations, project.geometry, project.sourceGeometry]);
+  }, [activeWorkspace, project.cutOperations, project.geometry, project.sourceGeometry]);
 
   const handleRendererError = useCallback((message: string) => {
     console.error('[WebGi]', message);
@@ -464,12 +466,15 @@ export function App() {
   return (
     <main className="appShell">
       <header className="appTabs">
-        <button className={activeTab === 'pattern' ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setActiveTab('pattern')}>
-          Pattern Designer
-        </button>
-        <button className={activeTab === 'gem' ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setActiveTab('gem')}>
-          Gem Preview
-        </button>
+        <strong className="workspaceTitle">Pattern + Gem</strong>
+        <div className="designerSizeControls" role="group" aria-label="Pattern Designer size">
+          <span>Designer</span>
+          {(['small', 'medium', 'large'] as const).map((size) => (
+            <button key={size} className={designerSize === size ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setDesignerSize(size)}>
+              {size[0].toUpperCase()}
+            </button>
+          ))}
+        </div>
         <button className="toolbarButton" disabled={cutHelperSteps.length === 0} onClick={() => setShowCutHelper(true)}>
           Cut Helper
         </button>
@@ -482,15 +487,27 @@ export function App() {
         </button>
       </header>
 
-      {activeTab === 'pattern' ? (
-        <PatternDesigner
-          pattern={designPattern}
-          onPatternChange={updateDesignPattern}
-          referenceImage={patternReferenceImage}
-          onReferenceImageChange={setPatternReferenceImage}
-        />
-      ) : (
-        <>
+      <section className={`combinedWorkspace designerSize-${designerSize}`}>
+        <section
+          className="designerPane"
+          aria-label="Pattern Designer"
+          onFocusCapture={() => setActiveWorkspace('pattern')}
+          onPointerDownCapture={() => setActiveWorkspace('pattern')}
+        >
+          <PatternDesigner
+            pattern={designPattern}
+            onPatternChange={updateDesignPattern}
+            referenceImage={patternReferenceImage}
+            onReferenceImageChange={setPatternReferenceImage}
+            keyboardActive={activeWorkspace === 'pattern'}
+          />
+        </section>
+        <section
+          className="gemPane"
+          aria-label="Gem Preview"
+          onFocusCapture={() => setActiveWorkspace('gem')}
+          onPointerDownCapture={() => setActiveWorkspace('gem')}
+        >
           <Toolbar
             background={background}
             facetDebugColors={facetDebugColors}
@@ -592,8 +609,8 @@ export function App() {
             </aside>
           </section>
           <StatusBar camera={cameraSnapshot} objectCount={objectCount} fps={fps} localCursor={undefined} />
-        </>
-      )}
+        </section>
+      </section>
       {showCutHelper && cutHelperSteps.length > 0 ? (
         <CutHelperDialog
           steps={cutHelperSteps}

@@ -29,7 +29,7 @@ select {
 
 .appShell {
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr);
   width: 100%;
   height: 100%;
   background: #14171b;
@@ -43,6 +43,65 @@ select {
   padding: 8px 12px;
   border-bottom: 1px solid #2d333a;
   background: #191d22;
+  overflow-x: auto;
+}
+
+.workspaceTitle {
+  margin-right: auto;
+  white-space: nowrap;
+}
+
+.designerSizeControls {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+  color: #aab2bd;
+  font-size: 12px;
+}
+
+.designerSizeControls .toolbarButton {
+  width: 32px;
+  padding: 0;
+}
+
+.combinedWorkspace {
+  --designer-size: 520px;
+  display: grid;
+  grid-template-columns: minmax(340px, var(--designer-size)) minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.designerSize-small {
+  --designer-size: 400px;
+}
+
+.designerSize-large {
+  --designer-size: 660px;
+}
+
+.designerPane {
+  width: 100%;
+  height: min(100%, var(--designer-size));
+  min-width: 0;
+  min-height: 340px;
+  aspect-ratio: 1;
+  align-self: start;
+  overflow: hidden;
+  border-right: 1px solid #2d333a;
+  border-bottom: 1px solid #2d333a;
+}
+
+.designerPane .patternDesignerWorkspace {
+  grid-template-columns: minmax(0, 1fr) minmax(160px, 38%);
+}
+
+.gemPane {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 0;
 }
 
 .workspace {
@@ -529,6 +588,11 @@ select {
   align-items: center;
 }
 
+.cutHelperDirection {
+  display: flex;
+  gap: 4px;
+}
+
 .cutHelperHeader p {
   margin-top: 3px;
   color: #97a2ae;
@@ -857,6 +921,59 @@ select {
 }
 
 @media (max-width: 860px) {
+  html,
+  body,
+  #root {
+    overflow: auto;
+  }
+
+  .appShell {
+    min-height: 100%;
+    height: auto;
+  }
+
+  .appTabs {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 8px;
+    overflow-x: visible;
+  }
+
+  .workspaceTitle {
+    flex: 1 0 100%;
+  }
+
+  .combinedWorkspace {
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .designerPane {
+    width: min(100%, var(--designer-size));
+    height: min(100vw, var(--designer-size));
+    min-height: 360px;
+    flex: 0 0 auto;
+    align-self: center;
+    border-right: 0;
+  }
+
+  .designerPane .patternDesignerTabs,
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 8px;
+    overflow-x: visible;
+  }
+
+  .designerPane .patternDesignerWorkspace {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) minmax(150px, 34%);
+  }
+
+  .gemPane {
+    min-height: 760px;
+  }
+
   .workspace {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) 210px;
@@ -890,6 +1007,11 @@ select {
     justify-content: flex-end;
   }
 
+  .cutHelperDirection {
+    flex-basis: 100%;
+    justify-content: flex-end;
+  }
+
   .measurementDialog {
     width: calc(100vw - 20px);
     height: calc(100vh - 20px);
@@ -913,5 +1035,41 @@ select {
     grid-column: 1 / -1;
     grid-row: 1;
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 520px) {
+  .designerSizeControls span {
+    display: none;
+  }
+
+  .appTabs .toolbarButton {
+    min-height: 36px;
+  }
+
+  .toolbarLabel {
+    flex-basis: 100%;
+  }
+
+  .toolbarGroup {
+    flex-wrap: wrap;
+  }
+
+  .workspace {
+    grid-template-rows: minmax(420px, 1fr) 300px;
+  }
+
+  .cutHelperHeader {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .cutHelperHeaderActions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .cutHelperDirection {
+    justify-content: flex-start;
   }
 }

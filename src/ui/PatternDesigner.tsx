@@ -11,6 +11,7 @@ import { normalizePattern, patternToCutPaths } from '../patterns/geometry/pathCo
 import { mirrorPrimitive, radialDuplicatePrimitives, transformPrimitive } from '../patterns/geometry/transforms';
 import { createRegularPolygonPrimitive } from '../patterns/editor/RegularPolygon';
 import { createCenteredRectanglePrimitive } from '../patterns/editor/Rectangle';
+import { createRosePatternPrimitives } from '../patterns/editor/RosePattern';
 import { snapEditorPoint, snapRegularShapePoint } from '../patterns/editor/SnapEngine';
 import type { PatternReferenceImage } from '../patterns/editor/PatternReferenceImage';
 import {
@@ -35,12 +36,13 @@ interface PatternDesignerProps {
   readonly onPatternChange: (pattern: DesignPattern) => void;
   readonly referenceImage?: PatternReferenceImage;
   readonly onReferenceImageChange?: (image: PatternReferenceImage | undefined) => void;
+  readonly keyboardActive?: boolean;
 }
 
 const tools: DesignerTool[] = ['select', 'line', 'rectangle', 'triangle', 'hexagon', 'pentagon'];
 const gridOptions = [1, 0.5, 0.1];
 
-export function PatternDesigner({ pattern, onPatternChange, referenceImage, onReferenceImageChange }: PatternDesignerProps) {
+export function PatternDesigner({ pattern, onPatternChange, referenceImage, onReferenceImageChange, keyboardActive = true }: PatternDesignerProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const undoStackRef = useRef<DesignPattern[]>([]);
   const redoStackRef = useRef<DesignPattern[]>([]);
@@ -68,6 +70,10 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
   const [transformScale, setTransformScale] = useState(1);
   const [showPatternData, setShowPatternData] = useState(false);
   const [moveReferenceImage, setMoveReferenceImage] = useState(false);
+  const [rosePetals, setRosePetals] = useState(8);
+  const [roseRadius, setRoseRadius] = useState(4);
+  const [roseLayers, setRoseLayers] = useState(1);
+  const [roseRotation, setRoseRotation] = useState(0);
 
   const selectedPrimitives = pattern.primitives.filter((primitive) => selectedIds.includes(primitive.id));
   const bounds = calculateDesignPatternBounds(pattern);
@@ -77,6 +83,9 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      if (!keyboardActive) {
+        return;
+      }
       const key = event.key.toLowerCase();
       const editableTarget = event.target instanceof HTMLElement
         && (event.target.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(event.target.tagName));
@@ -114,7 +123,7 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [clipboard, onPatternChange, pattern, selectedIds, selectedPrimitives, tool]);
+  }, [clipboard, keyboardActive, onPatternChange, pattern, selectedIds, selectedPrimitives, tool]);
 
   useEffect(() => {
     const svg = svgRef.current;
@@ -280,6 +289,23 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
           ) : (
             <p>Select geometry to edit properties or transforms.</p>
           )}
+          <h3>Decorative Rose</h3>
+          <NumberInput label="Petals" value={rosePetals} min={3} step={1} onChange={setRosePetals} />
+          <NumberInput label="Radius" value={roseRadius} min={0.001} step={0.1} onChange={setRoseRadius} />
+          <NumberInput label="Layers" value={roseLayers} min={1} max={6} step={1} onChange={setRoseLayers} />
+          <NumberInput label="Rotation" value={roseRotation} step={1} onChange={setRoseRotation} />
+          <button
+            className="toolbarButton"
+            onClick={() => appendPrimitives(createRosePatternPrimitives({
+              petals: rosePetals,
+              radius: roseRadius,
+              layers: roseLayers,
+              rotationDeg: roseRotation,
+              role,
+            }))}
+          >
+            Add Rose
+          </button>
           <h3>Actions</h3>
           <div className="patternControls">
             <button className="toolbarButton" onClick={duplicateSelection} disabled={selectedPrimitives.length === 0}>
@@ -728,11 +754,11 @@ function PatternData({ pattern }: { readonly pattern: DesignPattern }) {
   );
 }
 
-function NumberInput({ label, value, min, step, onChange }: { readonly label: string; readonly value: number; readonly min?: number; readonly step?: number; readonly onChange: (value: number) => void }) {
+function NumberInput({ label, value, min, max, step, onChange }: { readonly label: string; readonly value: number; readonly min?: number; readonly max?: number; readonly step?: number; readonly onChange: (value: number) => void }) {
   return (
     <label className="numberRow">
       {label}
-      <input type="number" min={min} step={step ?? 0.001} value={Number.isFinite(value) ? value : 0} onChange={(event) => onChange(Number(event.target.value))} />
+      <input type="number" min={min} max={max} step={step ?? 0.001} value={Number.isFinite(value) ? value : 0} onChange={(event) => onChange(Number(event.target.value))} />
     </label>
   );
 }

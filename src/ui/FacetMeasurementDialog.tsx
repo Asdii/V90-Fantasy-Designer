@@ -1,5 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { calculateMeasuredLengthMm, type MeasurementPoint } from '../geometry/FacetMeasurement';
+import {
+  calculateMeasuredLengthMm,
+  MEASUREMENT_PIXELS_PER_MM,
+  type MeasurementPoint,
+} from '../geometry/FacetMeasurement';
 import {
   createPatternReferenceImage,
   type PatternReferenceImage,
@@ -35,10 +39,10 @@ export function FacetMeasurementDialog({
   const [imageZoom, setImageZoom] = useState(1);
   const [imagePan, setImagePan] = useState({ x: 0, y: 0 });
   const [referenceDiameterMm, setReferenceDiameterMm] = useState(10);
-  const [referenceDiameterPx, setReferenceDiameterPx] = useState(180);
   const [referenceCenter, setReferenceCenter] = useState<MeasurementPoint>();
   const [tool, setTool] = useState<MeasurementTool>('move');
   const [points, setPoints] = useState<MeasurementPoint[]>([]);
+  const referenceDiameterPx = referenceDiameterMm * MEASUREMENT_PIXELS_PER_MM;
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -192,8 +196,7 @@ export function FacetMeasurementDialog({
               <button className={tool === 'measure' ? 'toolbarButton active' : 'toolbarButton'} disabled={!imageUrl} onClick={() => setTool('measure')}>Measure</button>
             </div>
             <RangeControl label="Photo scale" value={imageZoom} min={0.2} max={5} step={0.01} onChange={setImageZoom} />
-            <NumberControl label="Reference diameter" value={referenceDiameterMm} min={0.001} step={0.1} suffix="mm" onChange={setReferenceDiameterMm} />
-            <RangeControl label="Virtual circle" value={referenceDiameterPx} min={40} max={520} step={1} suffix="px" onChange={setReferenceDiameterPx} />
+            <RangeControl label="Virtual circle diameter" value={referenceDiameterMm} min={1} max={30} step={0.1} suffix="mm" onChange={setReferenceDiameterMm} />
             <p className="measurementHint">Move the photo and virtual circle independently until both circles match. Then choose Measure and mark both ends of the real facet.</p>
             <dl className="measurementResult">
               <dt>Measured facet</dt>
@@ -234,23 +237,6 @@ function RangeControl({ label, value, min, max, step, suffix, onChange }: {
       <span>{label}</span>
       <input type="range" value={value} min={min} max={max} step={step} onChange={(event) => onChange(Number(event.target.value))} />
       <output>{value.toFixed(step < 1 ? 2 : 0)} {suffix}</output>
-    </label>
-  );
-}
-
-function NumberControl({ label, value, min, step, suffix, onChange }: {
-  readonly label: string;
-  readonly value: number;
-  readonly min: number;
-  readonly step: number;
-  readonly suffix: string;
-  readonly onChange: (value: number) => void;
-}) {
-  return (
-    <label className="measurementControl measurementNumberControl">
-      <span>{label}</span>
-      <input type="number" value={value} min={min} step={step} onChange={(event) => onChange(Number(event.target.value))} />
-      <output>{suffix}</output>
     </label>
   );
 }
