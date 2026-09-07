@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPlaceholderGemGeometry } from '../geometry/createPlaceholderGemGeometry';
+import {
+  calculateFacetBoundarySpanMm,
+  calculateMeasurementScaleFactor,
+} from '../geometry/FacetMeasurement';
 import { createFacetLocalGeometry } from '../geometry/FacetLocalGeometry';
 import type { GemGeometry } from '../geometry/GemGeometry';
 import { parseStl } from '../geometry/stlParser';
@@ -14,6 +18,7 @@ import {
 import { gemMaterialPresets, type GemMaterial } from '../materials/GemMaterial';
 import type { GemProject } from '../project/GemProject';
 import { rebuildWorkingGemGeometry } from '../project/CutOperations';
+import { scaleGemProject } from '../project/scaleGemProject';
 import type { Pattern } from '../patterns/Pattern';
 import { createEmptyDesignPattern, type DesignPattern } from '../patterns/model/PatternModel';
 import {
@@ -30,6 +35,7 @@ import type { LightingPreset } from '../rendering/Scene';
 import type { GemEnvironmentPreset } from '../rendering/EnvironmentPreset';
 import { GemPreviewPanel } from '../ui/GemPreviewPanel';
 import { CutHelperDialog } from '../ui/CutHelperDialog';
+import { FacetMeasurementDialog } from '../ui/FacetMeasurementDialog';
 import { PatternDesigner } from '../ui/PatternDesigner';
 import { StatusBar } from '../ui/StatusBar';
 import { Toolbar } from '../ui/Toolbar';
@@ -82,6 +88,7 @@ export function App() {
   const [cutOperationState, setCutOperationState] = useState<CutOperationState>({ status: 'idle' });
   const [cutPreviewGeometry, setCutPreviewGeometry] = useState<GemGeometry | undefined>();
   const [showCutHelper, setShowCutHelper] = useState(false);
+  const [showFacetMeasurement, setShowFacetMeasurement] = useState(false);
   const cutOperationInProgressRef = useRef(false);
   const cutPreviewRequestRef = useRef(0);
   const latestProjectRef = useRef(project);
@@ -98,6 +105,19 @@ export function App() {
       grooveWidthMm: operation.cutHelper.grooveWidthMm,
     })),
   ), [project.cutOperations]);
+  const measurementFacet = useMemo(() => {
+    if (!project.geometry || selectedFacetId === undefined) {
+      return undefined;
+    }
+    const facet = project.geometry.facets.find((candidate) => candidate.id === selectedFacetId);
+    if (!facet) {
+      return undefined;
+    }
+    return {
+      id: facet.id,
+      lengthMm: calculateFacetBoundarySpanMm(project.geometry, facet),
+    };
+  }, [project.geometry, selectedFacetId]);
 
   const updateDesignPattern = (pattern: DesignPattern) => {
     setDesignPattern(pattern);
@@ -183,6 +203,7 @@ export function App() {
       setSelectedFacetId(undefined);
       setHoveredFacetId(undefined);
       setShowCutHelper(false);
+      setShowFacetMeasurement(false);
       setFitModelRequest((value) => value + 1);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Could not import STL file');
@@ -204,6 +225,7 @@ export function App() {
     setSelectedFacetId(undefined);
     setHoveredFacetId(undefined);
     setShowCutHelper(false);
+    setShowFacetMeasurement(false);
     setFitModelRequest((value) => value + 1);
   };
 
@@ -211,6 +233,29 @@ export function App() {
     setSelectedFacetId(undefined);
     setHoveredFacetId(undefined);
     setShowCutHelper(false);
+    setShowFacetMeasurement(false);
+  };
+
+  const applyFacetMeasurement = (measuredLengthMm: number) => {
+    if (!measurementFacet || measurementFacet.lengthMm <= 0 || cutOperationInProgressRef.current) {
+      return;
+    }
+    try {
+      const factor = calculateMeasurementScaleFactor(measuredLengthMm, measurementFacet.lengthMm);
+      setProject((current) => scaleGemProject(current, factor));
+      setPatternPlacement((current) => current ? {
+        ...current,
+        offsetX: current.offsetX * factor,
+        offsetY: current.offsetY * factor,
+        scale: current.scale * factor,
+      } : undefined);
+      setImportError(undefined);
+      setShowFacetMeasurement(false);
+      setCutPreviewGeometry(undefined);
+      setFitModelRequest((value) => value + 1);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Could not scale the gemstone from the measurement.');
+    }
   };
 
   const centerPatternOnFacet = () => {
@@ -305,6 +350,7 @@ export function App() {
       setSelectedFacetId(undefined);
       setHoveredFacetId(undefined);
       setShowCutHelper(false);
+      setShowFacetMeasurement(false);
       setImportError(undefined);
       setShowVGroovePreview(false);
       setCutOperationState({ status: 'success', message: 'Cuts created.' });
@@ -386,6 +432,13 @@ export function App() {
         </button>
         <button className="toolbarButton" disabled={cutHelperSteps.length === 0} onClick={() => setShowCutHelper(true)}>
           Cut Helper
+        </button>
+        <button
+          className="toolbarButton"
+          disabled={!measurementFacet || cutOperationState.status === 'running'}
+          onClick={() => setShowFacetMeasurement(true)}
+        >
+          Measure Facet
         </button>
       </header>
 
@@ -505,6 +558,14 @@ export function App() {
         <CutHelperDialog
           steps={cutHelperSteps}
           onClose={() => setShowCutHelper(false)}
+        />
+      ) : null}
+      {showFacetMeasurement && measurementFacet ? (
+        <FacetMeasurementDialog
+          facetId={measurementFacet.id}
+          modelFacetLengthMm={measurementFacet.lengthMm}
+          onApply={applyFacetMeasurement}
+          onClose={() => setShowFacetMeasurement(false)}
         />
       ) : null}
     </main>

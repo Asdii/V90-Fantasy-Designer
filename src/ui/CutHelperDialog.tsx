@@ -18,6 +18,7 @@ interface CutHelperDialogProps {
 
 export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
   const [stepIndex, setStepIndex] = useState(0);
+  const [orientationDeg, setOrientationDeg] = useState(0);
   const activeIndex = Math.min(stepIndex, Math.max(0, steps.length - 1));
   const activeStep = steps[activeIndex];
   const instruction = activeStep?.instruction;
@@ -25,10 +26,16 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
     () => activeStep ? createViewport(activeStep.localGeometry, activeStep.grooveWidthMm) : undefined,
     [activeStep],
   );
+  const wheelTicks = useMemo(() => viewport ? createAngleTicks(viewport.wheelRadius) : [], [viewport]);
 
   useEffect(() => {
     setStepIndex((current) => Math.min(current, Math.max(0, steps.length - 1)));
   }, [steps.length]);
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => setOrientationDeg(instruction ? -instruction.angleDeg : 0));
+    return () => cancelAnimationFrame(frame);
+  }, [activeIndex, instruction]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -65,7 +72,11 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
             <h2 id="cut-helper-title">Cut Helper</h2>
             <p>{activeStep ? `Operation ${activeStep.operationNumber} · Facet ${activeStep.facetId}` : 'Completed cutting sequence'}</p>
           </div>
-          <button className="toolbarButton" onClick={onClose} aria-label="Close Cut Helper">Close</button>
+          <div className="cutHelperHeaderActions">
+            <button className="toolbarButton" disabled={!instruction} onClick={() => setOrientationDeg(instruction ? -instruction.angleDeg : 0)}>Orient to cut</button>
+            <button className="toolbarButton" onClick={() => setOrientationDeg(0)}>Return to 0°</button>
+            <button className="toolbarButton" onClick={onClose} aria-label="Close Cut Helper">Close</button>
+          </div>
         </header>
 
         <div className="cutHelperViewport">
@@ -77,44 +88,44 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
                 </marker>
               </defs>
               <rect x={viewport.x} y={viewport.y} width={viewport.width} height={viewport.height} fill="#f7f9fb" />
-              <line x1={viewport.x} y1="0" x2={viewport.x + viewport.width} y2="0" className="cutHelperAxis cutHelperAxisX" />
-              <line x1="0" y1={viewport.y} x2="0" y2={viewport.y + viewport.height} className="cutHelperAxis cutHelperAxisY" />
-              <polygon points={activeStep.localGeometry.boundary.map((point) => `${point.u},${-point.v}`).join(' ')} className="cutHelperFacet" />
-
-              {completedInOperation.flatMap((completed) => completed.instruction.visibleSegments.map((segment) => (
-                <line
-                  key={`completed-${completed.operationId}-${completed.instruction.step}-${segment.id}`}
-                  x1={segment.start.u}
-                  y1={-segment.start.v}
-                  x2={segment.end.u}
-                  y2={-segment.end.v}
-                  className="cutHelperCompletedCut"
-                  style={{ strokeWidth: Math.max(completed.grooveWidthMm, viewport.hairline * 2) }}
-                />
-              )))}
-
-              {instruction.visibleSegments.map((segment) => (
-                <g key={`active-${segment.id}`}>
-                  <line
-                    x1={segment.start.u}
-                    y1={-segment.start.v}
-                    x2={segment.end.u}
-                    y2={-segment.end.v}
-                    className="cutHelperActiveOpening"
-                    style={{ strokeWidth: Math.max(activeStep.grooveWidthMm, viewport.hairline * 3) }}
-                  />
-                  <line
-                    x1={segment.start.u}
-                    y1={-segment.start.v}
-                    x2={segment.end.u}
-                    y2={-segment.end.v}
-                    className="cutHelperActiveCenter"
-                    style={{ strokeWidth: viewport.hairline }}
-                    markerEnd="url(#cut-helper-arrow)"
-                  />
-                </g>
+              <circle cx="0" cy="0" r={viewport.wheelRadius} className="cutHelperWheel" />
+              {wheelTicks.map((tick) => (
+                <line key={`tick-${tick.angle}`} x1={tick.x1} y1={tick.y1} x2={tick.x2} y2={tick.y2} className={tick.major ? 'cutHelperWheelTick major' : 'cutHelperWheelTick'} />
               ))}
-              <circle cx="0" cy="0" r={viewport.hairline * 2.4} className="cutHelperOrigin" />
+              {wheelTicks.filter((tick) => tick.label).map((tick) => (
+                <text
+                  key={`label-${tick.angle}`}
+                  x={tick.labelX}
+                  y={tick.labelY}
+                  className="cutHelperWheelLabel"
+                  style={{ fontSize: viewport.wheelRadius * 0.075 }}
+                >
+                  {tick.angle}°
+                </text>
+              ))}
+              <g className="cutHelperRotatingStage" style={{ transform: `rotate(${orientationDeg}deg)` }}>
+                <line x1={viewport.x} y1="0" x2={viewport.x + viewport.width} y2="0" className="cutHelperAxis cutHelperAxisX" />
+                <line x1="0" y1={viewport.y} x2="0" y2={viewport.y + viewport.height} className="cutHelperAxis cutHelperAxisY" />
+                <polygon points={activeStep.localGeometry.boundary.map((point) => `${point.u},${-point.v}`).join(' ')} className="cutHelperFacet" />
+
+                {completedInOperation.flatMap((completed) => completed.instruction.visibleSegments.map((segment) => (
+                  <line
+                    key={`completed-${completed.operationId}-${completed.instruction.step}-${segment.id}`}
+                    x1={segment.start.u} y1={-segment.start.v}
+                    x2={segment.end.u} y2={-segment.end.v}
+                    className="cutHelperCompletedCut"
+                    style={{ strokeWidth: Math.max(completed.grooveWidthMm, viewport.hairline * 2) }}
+                  />
+                )))}
+
+                {instruction.visibleSegments.map((segment) => (
+                  <g key={`active-${segment.id}`}>
+                    <line x1={segment.start.u} y1={-segment.start.v} x2={segment.end.u} y2={-segment.end.v} className="cutHelperActiveOpening" style={{ strokeWidth: Math.max(activeStep.grooveWidthMm, viewport.hairline * 3) }} />
+                    <line x1={segment.start.u} y1={-segment.start.v} x2={segment.end.u} y2={-segment.end.v} className="cutHelperActiveCenter" style={{ strokeWidth: viewport.hairline }} markerEnd="url(#cut-helper-arrow)" />
+                  </g>
+                ))}
+                <circle cx="0" cy="0" r={viewport.hairline * 2.4} className="cutHelperOrigin" />
+              </g>
             </svg>
           ) : (
             <p className="cutHelperEmpty">There are no pattern cuts on this facet.</p>
@@ -154,20 +165,46 @@ function Metric({ label, value }: { readonly label: string; readonly value: stri
 }
 
 function createViewport(localGeometry: FacetLocalGeometry, grooveWidthMm: number) {
-  const diagonal = Math.hypot(localGeometry.bounds.width, localGeometry.bounds.height);
-  const padding = Math.max(diagonal * 0.08, grooveWidthMm * 2, 0.25);
-  const x = localGeometry.bounds.minU - padding;
-  const y = -localGeometry.bounds.maxV - padding;
-  const width = localGeometry.bounds.width + padding * 2;
-  const height = localGeometry.bounds.height + padding * 2;
+  const diagonal = Math.max(Math.hypot(localGeometry.bounds.width, localGeometry.bounds.height), 0.5);
+  const facetRadius = Math.max(...localGeometry.boundary.map((point) => Math.hypot(point.u, point.v)), diagonal / 2);
+  const wheelRadius = Math.max(facetRadius * 1.18, facetRadius + grooveWidthMm * 3, 0.5);
+  const extent = wheelRadius * 1.2;
+  const x = -extent;
+  const y = -extent;
+  const width = extent * 2;
+  const height = extent * 2;
   return {
     x,
     y,
     width,
     height,
+    wheelRadius,
     hairline: Math.max(diagonal * 0.0025, 0.01),
     viewBox: `${x} ${y} ${width} ${height}`,
   };
+}
+
+function createAngleTicks(radius: number) {
+  return Array.from({ length: 72 }, (_, index) => {
+    const angle = index * 5;
+    const radians = (angle * Math.PI) / 180;
+    const major = angle % 30 === 0;
+    const medium = angle % 10 === 0;
+    const length = radius * (major ? 0.09 : medium ? 0.06 : 0.035);
+    const inner = radius - length;
+    const labelRadius = radius * 0.84;
+    return {
+      angle,
+      major,
+      label: major,
+      x1: Math.cos(radians) * inner,
+      y1: -Math.sin(radians) * inner,
+      x2: Math.cos(radians) * radius,
+      y2: -Math.sin(radians) * radius,
+      labelX: Math.cos(radians) * labelRadius,
+      labelY: -Math.sin(radians) * labelRadius,
+    };
+  });
 }
 
 function formatAngle(value: number) {
