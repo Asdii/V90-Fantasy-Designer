@@ -7,6 +7,7 @@ export interface PatternReferenceImage {
   readonly naturalHeight: number;
   readonly mmPerPixel: number;
   readonly center: Vec2;
+  readonly rotationDeg: number;
   readonly opacity: number;
 }
 
@@ -20,6 +21,7 @@ export interface ReferenceImageCalibration {
   readonly imagePan: Vec2;
   readonly referenceDiameterMm: number;
   readonly referenceDiameterPx: number;
+  readonly imageRotationDeg?: number;
 }
 
 export function createPatternReferenceImage(calibration: ReferenceImageCalibration): PatternReferenceImage {
@@ -40,6 +42,7 @@ export function createPatternReferenceImage(calibration: ReferenceImageCalibrati
       x: calibration.imagePan.x * mmPerScreenPixel,
       y: -calibration.imagePan.y * mmPerScreenPixel,
     },
+    rotationDeg: calibration.imageRotationDeg ?? 0,
     opacity: 0.38,
   };
 }

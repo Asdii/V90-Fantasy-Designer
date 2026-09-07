@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { BoundingBox, GemGeometry } from '../geometry/GemGeometry';
 import { createFacetLocalGeometry } from '../geometry/FacetLocalGeometry';
@@ -159,7 +159,6 @@ export function Viewport({
   const gemCacheKeyRef = useRef('working-gem-initial');
   const gemRenderRevisionRef = useRef(0);
   const renderModeRef = useRef(renderMode);
-  const geometryRef = useRef(project.geometry);
   const callbacksRef = useRef({
     onCameraSnapshotChange,
     onFpsChange,
@@ -176,11 +175,9 @@ export function Viewport({
   const [previewPoint, setPreviewPoint] = useState<Vec2 | undefined>();
   const [dragPreviewPattern, setDragPreviewPattern] = useState<Pattern | undefined>();
   const [viewerReady, setViewerReady] = useState(false);
-  const [scaleBarPixels, setScaleBarPixels] = useState(0);
 
   cleanRenderRef.current = cleanRender;
   renderModeRef.current = renderMode;
-  geometryRef.current = project.geometry;
   callbacksRef.current = { onCameraSnapshotChange, onFpsChange, onObjectCountChange, onRendererError };
 
   useEffect(() => {
@@ -267,8 +264,6 @@ export function Viewport({
         lastFpsUpdate = now;
         callbacksRef.current.onObjectCountChange(scene.children.length);
         callbacksRef.current.onCameraSnapshotChange(snapshotCamera(camera, controls.target));
-        const nextScaleBarPixels = calculateScaleBarPixels(camera, canvas, geometryRef.current, 10);
-        setScaleBarPixels((current) => Math.abs(current - nextScaleBarPixels) > 0.5 ? nextScaleBarPixels : current);
       }
 
       animationFrame = requestAnimationFrame(animate);
@@ -665,12 +660,7 @@ export function Viewport({
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
       />
-      {scaleBarPixels > 0 ? (
-        <div className="modelScaleReference" aria-label="10 millimeter model scale reference">
-          <span>10 mm</span>
-          <div className="modelScaleLine" style={{ width: `${scaleBarPixels}px` }} />
-        </div>
-      ) : null}
+      {!cleanRender && project.geometry ? <ModelScalePreview geometry={project.geometry} /> : null}
     </section>
   );
 
@@ -838,23 +828,55 @@ export function Viewport({
   }
 }
 
-function calculateScaleBarPixels(
-  camera: AppCamera,
-  canvas: HTMLCanvasElement,
-  geometry: GemGeometry | undefined,
-  lengthMm: number,
-) {
-  if (!geometry || canvas.clientWidth <= 0) return 0;
-  const center = new THREE.Vector3(
-    geometry.boundingBox.center.x,
-    geometry.boundingBox.center.y,
-    geometry.boundingBox.center.z,
+const MODEL_PREVIEW_PIXELS_PER_MM = 2;
+
+function ModelScalePreview({ geometry }: { readonly geometry: GemGeometry }) {
+  const preview = useMemo(() => {
+    const center = geometry.boundingBox.center;
+    const projectPoint = (index: number) => {
+      const point = geometry.vertices[index];
+      const x = point.x - center.x;
+      const y = point.y - center.y;
+      const z = point.z - center.z;
+      return {
+        x: (x - z) * 0.8660254 * MODEL_PREVIEW_PIXELS_PER_MM,
+        y: -(y + (x + z) * 0.35) * MODEL_PREVIEW_PIXELS_PER_MM,
+        depth: x + y + z,
+      };
+    };
+    const stride = Math.max(1, Math.ceil(geometry.triangles.length / 700));
+    const faces = geometry.triangles
+      .filter((_, index) => index % stride === 0)
+      .map((triangle) => {
+        const points = [projectPoint(triangle.a), projectPoint(triangle.b), projectPoint(triangle.c)];
+        return { points, depth: points.reduce((sum, point) => sum + point.depth, 0) / 3 };
+      })
+      .sort((a, b) => a.depth - b.depth);
+    const size = geometry.boundingBox.size;
+    return {
+      faces,
+      maximumSize: Math.max(size.x, size.y, size.z),
+    };
+  }, [geometry]);
+
+  return (
+    <figure className="modelScalePreview" aria-label="Current model shown against a 10 millimeter reference">
+      <svg viewBox="-90 -72 180 144" aria-hidden="true">
+        <g className="modelScaleGem">
+          {preview.faces.map((face, index) => (
+            <polygon key={index} points={face.points.map((point) => `${point.x},${point.y}`).join(' ')} />
+          ))}
+        </g>
+        <g className="modelScaleRuler">
+          <line x1="-80" y1="59" x2="-60" y2="59" />
+          <line x1="-80" y1="55" x2="-80" y2="63" />
+          <line x1="-60" y1="55" x2="-60" y2="63" />
+          <text x="-70" y="52" textAnchor="middle">10 mm</text>
+        </g>
+      </svg>
+      <figcaption>Model max {preview.maximumSize.toFixed(1)} mm</figcaption>
+    </figure>
   );
-  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-  const start = center.clone().addScaledVector(right, -lengthMm / 2).project(camera);
-  const end = center.clone().addScaledVector(right, lengthMm / 2).project(camera);
-  const pixels = Math.abs(end.x - start.x) * canvas.clientWidth / 2;
-  return Number.isFinite(pixels) ? Math.min(pixels, canvas.clientWidth * 0.7) : 0;
 }
 
 function applyCleanRenderVisibility(scene: THREE.Scene, clean: boolean) {

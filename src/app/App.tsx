@@ -5,6 +5,10 @@ import {
   calculateMaximumMeasurementSpan,
   calculateMeasurementScaleFactor,
 } from '../geometry/FacetMeasurement';
+import {
+  createDefaultFacetMeasurementSession,
+  type FacetMeasurementSession,
+} from '../geometry/FacetMeasurementSession';
 import { createFacetLocalGeometry } from '../geometry/FacetLocalGeometry';
 import type { GemGeometry } from '../geometry/GemGeometry';
 import { parseStl } from '../geometry/stlParser';
@@ -106,6 +110,7 @@ export function App() {
   const [showCutHelper, setShowCutHelper] = useState(false);
   const [showFacetMeasurement, setShowFacetMeasurement] = useState(false);
   const [facetMeasurementMessage, setFacetMeasurementMessage] = useState<string>();
+  const [facetMeasurementSession, setFacetMeasurementSession] = useState<FacetMeasurementSession>(() => createDefaultFacetMeasurementSession());
   const [patternReferenceImage, setPatternReferenceImage] = useState<PatternReferenceImage>();
   const cutOperationInProgressRef = useRef(false);
   const cutPreviewRequestRef = useRef(0);
@@ -125,6 +130,7 @@ export function App() {
     project,
     designPattern,
     patternReferenceImage,
+    facetMeasurementSession,
     patternPlacement,
     selectedFacetId,
     appSettings,
@@ -150,7 +156,7 @@ export function App() {
     },
   }), [
     appSettings, background, cleanRender, designPattern, designerSize, environmentPreset,
-    facetDebugColors, gemMaterial, gemViewMode, patternPlacement, patternReferenceImage,
+    facetDebugColors, facetMeasurementSession, gemMaterial, gemViewMode, patternPlacement, patternReferenceImage,
     project, selectedFacetId, showFacetBoundaries, showFacetNormals, showLocalWorkplane,
     showVGroovePreview, showWireframe, vGrooveCutterPreset, vGrooveDisplayMode, vGrooveSettings,
   ]);
@@ -300,6 +306,7 @@ export function App() {
       setHoveredFacetId(undefined);
       setShowCutHelper(false);
       setShowFacetMeasurement(false);
+      setFacetMeasurementSession(createDefaultFacetMeasurementSession());
       setPatternReferenceImage(undefined);
       setFitModelRequest((value) => value + 1);
     } catch (error) {
@@ -329,6 +336,7 @@ export function App() {
     setShowCutHelper(false);
     setShowFacetMeasurement(false);
     setFacetMeasurementMessage(undefined);
+    setFacetMeasurementSession(createDefaultFacetMeasurementSession());
     setPatternReferenceImage(undefined);
     setCutPreviewGeometry(undefined);
     setShowVGroovePreview(true);
@@ -559,6 +567,7 @@ export function App() {
     setProject({ ...snapshot.project, designPattern: snapshot.designPattern });
     setDesignPattern(snapshot.designPattern);
     setPatternReferenceImage(snapshot.patternReferenceImage);
+    setFacetMeasurementSession(snapshot.facetMeasurementSession ?? createDefaultFacetMeasurementSession());
     setPatternPlacement(validFacetId !== undefined ? snapshot.patternPlacement : undefined);
     setSelectedFacetId(validFacetId);
     setHoveredFacetId(undefined);
@@ -786,7 +795,9 @@ export function App() {
           facetId={measurementFacet.id}
           modelFacetLengthMm={measurementFacet.lengthMm}
           facetGuide={measurementFacet.guide}
+          session={facetMeasurementSession}
           statusMessage={facetMeasurementMessage}
+          onSessionChange={setFacetMeasurementSession}
           onApply={applyFacetMeasurement}
           onClose={() => setShowFacetMeasurement(false)}
         />

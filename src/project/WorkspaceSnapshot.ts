@@ -2,6 +2,7 @@ import { normalizeAppSettings, type AppSettings } from '../app/AppSettings';
 import type { VGrooveCutterPreset, VGrooveDisplayMode, VGrooveSettings } from '../grooves';
 import type { GemMaterial } from '../materials/GemMaterial';
 import type { PatternReferenceImage } from '../patterns/editor/PatternReferenceImage';
+import type { FacetMeasurementSession } from '../geometry/FacetMeasurementSession';
 import type { DesignPattern } from '../patterns/model/PatternModel';
 import type { PatternPlacement } from '../patterns/placement/PatternPlacement';
 import type { BackgroundMode } from '../rendering/background';
@@ -19,6 +20,7 @@ export interface WorkspaceSnapshot {
   readonly project: GemProject;
   readonly designPattern: DesignPattern;
   readonly patternReferenceImage?: PatternReferenceImage;
+  readonly facetMeasurementSession?: FacetMeasurementSession;
   readonly patternPlacement?: PatternPlacement;
   readonly selectedFacetId?: number;
   readonly appSettings: AppSettings;

@@ -17,5 +17,22 @@ describe('createPatternReferenceImage', () => {
 
     expect(image.mmPerPixel).toBeCloseTo(0.08);
     expect(image.center).toEqual({ x: 2, y: 1 });
+    expect(image.rotationDeg).toBe(0);
+  });
+
+  it('preserves photo rotation for the pattern overlay', () => {
+    const image = createPatternReferenceImage({
+      dataUrl: 'data:image/png;base64,test',
+      naturalWidth: 100,
+      naturalHeight: 100,
+      viewportWidth: 500,
+      viewportHeight: 500,
+      imageZoom: 1,
+      imagePan: { x: 0, y: 0 },
+      imageRotationDeg: 27,
+      referenceDiameterMm: 10,
+      referenceDiameterPx: 180,
+    });
+    expect(image.rotationDeg).toBe(27);
   });
 });

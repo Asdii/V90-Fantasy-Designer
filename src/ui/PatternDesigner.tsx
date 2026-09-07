@@ -611,6 +611,7 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
   function renderReferenceImage(image: PatternReferenceImage) {
     const width = image.naturalWidth * image.mmPerPixel;
     const height = image.naturalHeight * image.mmPerPixel;
+    const center = toScreen(image.center);
     const topLeft = toScreen({ x: image.center.x - width / 2, y: image.center.y + height / 2 });
     return (
       <image
@@ -620,6 +621,7 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
         width={width * viewport.zoom}
         height={height * viewport.zoom}
         opacity={image.opacity}
+        transform={`rotate(${image.rotationDeg ?? 0} ${center.x} ${center.y})`}
         preserveAspectRatio="none"
         pointerEvents="none"
       />
