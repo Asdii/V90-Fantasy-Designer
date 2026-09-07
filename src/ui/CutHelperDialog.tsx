@@ -33,7 +33,7 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
   }, [steps.length]);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setOrientationDeg(instruction ? -instruction.angleDeg : 0));
+    const frame = requestAnimationFrame(() => setOrientationDeg(instruction ? instruction.angleDeg : 0));
     return () => cancelAnimationFrame(frame);
   }, [activeIndex, instruction]);
 
@@ -73,7 +73,7 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
             <p>{activeStep ? `Operation ${activeStep.operationNumber} · Facet ${activeStep.facetId}` : 'Completed cutting sequence'}</p>
           </div>
           <div className="cutHelperHeaderActions">
-            <button className="toolbarButton" disabled={!instruction} onClick={() => setOrientationDeg(instruction ? -instruction.angleDeg : 0)}>Orient to cut</button>
+            <button className="toolbarButton" disabled={!instruction} onClick={() => setOrientationDeg(instruction ? instruction.angleDeg : 0)}>Orient to cut</button>
             <button className="toolbarButton" onClick={() => setOrientationDeg(0)}>Return to 0°</button>
             <button className="toolbarButton" onClick={onClose} aria-label="Close Cut Helper">Close</button>
           </div>
@@ -88,22 +88,22 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
                 </marker>
               </defs>
               <rect x={viewport.x} y={viewport.y} width={viewport.width} height={viewport.height} fill="#f7f9fb" />
-              <circle cx="0" cy="0" r={viewport.wheelRadius} className="cutHelperWheel" />
-              {wheelTicks.map((tick) => (
-                <line key={`tick-${tick.angle}`} x1={tick.x1} y1={tick.y1} x2={tick.x2} y2={tick.y2} className={tick.major ? 'cutHelperWheelTick major' : 'cutHelperWheelTick'} />
-              ))}
-              {wheelTicks.filter((tick) => tick.label).map((tick) => (
-                <text
-                  key={`label-${tick.angle}`}
-                  x={tick.labelX}
-                  y={tick.labelY}
-                  className="cutHelperWheelLabel"
-                  style={{ fontSize: viewport.wheelRadius * 0.075 }}
-                >
-                  {tick.angle}°
-                </text>
-              ))}
               <g className="cutHelperRotatingStage" style={{ transform: `rotate(${orientationDeg}deg)` }}>
+                <circle cx="0" cy="0" r={viewport.wheelRadius} className="cutHelperWheel" />
+                {wheelTicks.map((tick) => (
+                  <line key={`tick-${tick.angle}`} x1={tick.x1} y1={tick.y1} x2={tick.x2} y2={tick.y2} className={tick.major ? 'cutHelperWheelTick major' : 'cutHelperWheelTick'} />
+                ))}
+                {wheelTicks.filter((tick) => tick.label).map((tick) => (
+                  <text
+                    key={`label-${tick.angle}`}
+                    x={tick.labelX}
+                    y={tick.labelY}
+                    className="cutHelperWheelLabel"
+                    style={{ fontSize: viewport.wheelRadius * 0.075 }}
+                  >
+                    {tick.angle}°
+                  </text>
+                ))}
                 <line x1={viewport.x} y1="0" x2={viewport.x + viewport.width} y2="0" className="cutHelperAxis cutHelperAxisX" />
                 <line x1="0" y1={viewport.y} x2="0" y2={viewport.y + viewport.height} className="cutHelperAxis cutHelperAxisY" />
                 <polygon points={activeStep.localGeometry.boundary.map((point) => `${point.u},${-point.v}`).join(' ')} className="cutHelperFacet" />
@@ -126,6 +126,10 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
                 ))}
                 <circle cx="0" cy="0" r={viewport.hairline * 2.4} className="cutHelperOrigin" />
               </g>
+              <path
+                d={`M ${-viewport.wheelRadius * 0.035} ${viewport.wheelRadius * 1.08} L 0 ${viewport.wheelRadius * 0.99} L ${viewport.wheelRadius * 0.035} ${viewport.wheelRadius * 1.08} Z`}
+                className="cutHelperIndexMarker"
+              />
             </svg>
           ) : (
             <p className="cutHelperEmpty">There are no pattern cuts on this facet.</p>
@@ -197,12 +201,12 @@ function createAngleTicks(radius: number) {
       angle,
       major,
       label: major,
-      x1: Math.cos(radians) * inner,
-      y1: -Math.sin(radians) * inner,
-      x2: Math.cos(radians) * radius,
-      y2: -Math.sin(radians) * radius,
-      labelX: Math.cos(radians) * labelRadius,
-      labelY: -Math.sin(radians) * labelRadius,
+      x1: Math.sin(radians) * inner,
+      y1: Math.cos(radians) * inner,
+      x2: Math.sin(radians) * radius,
+      y2: Math.cos(radians) * radius,
+      labelX: Math.sin(radians) * labelRadius,
+      labelY: Math.cos(radians) * labelRadius,
     };
   });
 }

@@ -21,6 +21,7 @@ import { rebuildWorkingGemGeometry } from '../project/CutOperations';
 import { scaleGemProject } from '../project/scaleGemProject';
 import type { Pattern } from '../patterns/Pattern';
 import { createEmptyDesignPattern, type DesignPattern } from '../patterns/model/PatternModel';
+import type { PatternReferenceImage } from '../patterns/editor/PatternReferenceImage';
 import {
   createDefaultPatternPlacement,
   centerPatternPlacement,
@@ -35,7 +36,7 @@ import type { LightingPreset } from '../rendering/Scene';
 import type { GemEnvironmentPreset } from '../rendering/EnvironmentPreset';
 import { GemPreviewPanel } from '../ui/GemPreviewPanel';
 import { CutHelperDialog } from '../ui/CutHelperDialog';
-import { FacetMeasurementDialog } from '../ui/FacetMeasurementDialog';
+import { FacetMeasurementDialog, type FacetMeasurementResult } from '../ui/FacetMeasurementDialog';
 import { PatternDesigner } from '../ui/PatternDesigner';
 import { StatusBar } from '../ui/StatusBar';
 import { Toolbar } from '../ui/Toolbar';
@@ -89,6 +90,7 @@ export function App() {
   const [cutPreviewGeometry, setCutPreviewGeometry] = useState<GemGeometry | undefined>();
   const [showCutHelper, setShowCutHelper] = useState(false);
   const [showFacetMeasurement, setShowFacetMeasurement] = useState(false);
+  const [patternReferenceImage, setPatternReferenceImage] = useState<PatternReferenceImage>();
   const cutOperationInProgressRef = useRef(false);
   const cutPreviewRequestRef = useRef(0);
   const latestProjectRef = useRef(project);
@@ -204,6 +206,7 @@ export function App() {
       setHoveredFacetId(undefined);
       setShowCutHelper(false);
       setShowFacetMeasurement(false);
+      setPatternReferenceImage(undefined);
       setFitModelRequest((value) => value + 1);
     } catch (error) {
       setImportError(error instanceof Error ? error.message : 'Could not import STL file');
@@ -226,6 +229,7 @@ export function App() {
     setHoveredFacetId(undefined);
     setShowCutHelper(false);
     setShowFacetMeasurement(false);
+    setPatternReferenceImage(undefined);
     setFitModelRequest((value) => value + 1);
   };
 
@@ -236,13 +240,14 @@ export function App() {
     setShowFacetMeasurement(false);
   };
 
-  const applyFacetMeasurement = (measuredLengthMm: number) => {
+  const applyFacetMeasurement = ({ measuredLengthMm, referenceImage }: FacetMeasurementResult) => {
     if (!measurementFacet || measurementFacet.lengthMm <= 0 || cutOperationInProgressRef.current) {
       return;
     }
     try {
       const factor = calculateMeasurementScaleFactor(measuredLengthMm, measurementFacet.lengthMm);
       setProject((current) => scaleGemProject(current, factor));
+      setPatternReferenceImage(referenceImage);
       setPatternPlacement((current) => current ? {
         ...current,
         offsetX: current.offsetX * factor,
@@ -443,7 +448,12 @@ export function App() {
       </header>
 
       {activeTab === 'pattern' ? (
-        <PatternDesigner pattern={designPattern} onPatternChange={updateDesignPattern} />
+        <PatternDesigner
+          pattern={designPattern}
+          onPatternChange={updateDesignPattern}
+          referenceImage={patternReferenceImage}
+          onReferenceImageChange={setPatternReferenceImage}
+        />
       ) : (
         <>
           <Toolbar

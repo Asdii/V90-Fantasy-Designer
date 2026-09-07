@@ -12,6 +12,11 @@ export interface SnapResult {
   readonly source: 'grid' | 'endpoint' | 'intersection' | 'center' | 'raw';
 }
 
+export interface RadialSnapOptions extends SnapOptions {
+  readonly center: Vec2;
+  readonly angleStepDeg?: number;
+}
+
 export function snapEditorPoint(rawPoint: Vec2, pattern: DesignPattern, options: SnapOptions): SnapResult {
   if (!options.enabled) {
     return { point: rawPoint, source: 'raw' };
@@ -50,6 +55,36 @@ export function snapEditorPoint(rawPoint: Vec2, pattern: DesignPattern, options:
   return { point: rawPoint, source: 'raw' };
 }
 
+export function snapRegularShapePoint(rawPoint: Vec2, pattern: DesignPattern, options: RadialSnapOptions): Vec2 {
+  const dx = rawPoint.x - options.center.x;
+  const dy = rawPoint.y - options.center.y;
+  let radius = Math.hypot(dx, dy);
+  let angle = Math.atan2(dy, dx);
+
+  if (options.angleStepDeg && options.angleStepDeg > 0) {
+    const step = (options.angleStepDeg * Math.PI) / 180;
+    angle = Math.round(angle / step) * step;
+  }
+
+  if (options.enabled) {
+    const matchingRadius = regularShapeRadii(pattern.primitives, options.center)
+      .map((candidate) => ({ candidate, distance: Math.abs(candidate - radius) }))
+      .filter(({ distance }) => distance <= options.snapDistanceWorld)
+      .sort((a, b) => a.distance - b.distance)[0]?.candidate;
+
+    if (matchingRadius !== undefined) {
+      radius = matchingRadius;
+    } else if (options.gridSpacing > 0) {
+      radius = Math.round(radius / options.gridSpacing) * options.gridSpacing;
+    }
+  }
+
+  return {
+    x: options.center.x + Math.cos(angle) * radius,
+    y: options.center.y + Math.sin(angle) * radius,
+  };
+}
+
 function endpointCandidates(primitives: readonly PatternPrimitive[]): Vec2[] {
   return primitives.flatMap((primitive) => {
     if (primitive.type === 'line') {
@@ -69,7 +104,41 @@ function endpointCandidates(primitives: readonly PatternPrimitive[]): Vec2[] {
 }
 
 function centerCandidates(primitives: readonly PatternPrimitive[]): Vec2[] {
-  return primitives.flatMap((primitive) => (primitive.type === 'circle' || primitive.type === 'arc' ? [primitive.center] : []));
+  return primitives.flatMap((primitive) => {
+    if (primitive.type === 'circle' || primitive.type === 'arc') {
+      return [primitive.center];
+    }
+    if (primitive.type === 'polyline' && primitive.closed && primitive.points.length > 2) {
+      return [polygonCenter(primitive.points)];
+    }
+    return [];
+  });
+}
+
+function regularShapeRadii(primitives: readonly PatternPrimitive[], center: Vec2): number[] {
+  return primitives.flatMap((primitive) => {
+    if (primitive.type === 'circle' && distance2D(primitive.center, center) <= 1e-6) {
+      return [primitive.radius];
+    }
+    if (primitive.type !== 'polyline' || !primitive.closed || primitive.points.length < 3) {
+      return [];
+    }
+    const primitiveCenter = polygonCenter(primitive.points);
+    if (distance2D(primitiveCenter, center) > 1e-6) {
+      return [];
+    }
+    const radii = primitive.points.map((point) => distance2D(point, primitiveCenter));
+    const mean = radii.reduce((sum, value) => sum + value, 0) / radii.length;
+    const tolerance = Math.max(mean * 1e-6, 1e-9);
+    return radii.every((value) => Math.abs(value - mean) <= tolerance) ? [mean] : [];
+  });
+}
+
+function polygonCenter(points: readonly Vec2[]): Vec2 {
+  return points.reduce(
+    (center, point) => ({ x: center.x + point.x / points.length, y: center.y + point.y / points.length }),
+    { x: 0, y: 0 },
+  );
 }
 
 function intersectionCandidates(primitives: readonly PatternPrimitive[]): Vec2[] {

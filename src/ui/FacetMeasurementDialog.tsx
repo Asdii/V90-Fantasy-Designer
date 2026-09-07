@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { calculateMeasuredLengthMm, type MeasurementPoint } from '../geometry/FacetMeasurement';
+import {
+  createPatternReferenceImage,
+  type PatternReferenceImage,
+} from '../patterns/editor/PatternReferenceImage';
+
+export interface FacetMeasurementResult {
+  readonly measuredLengthMm: number;
+  readonly referenceImage: PatternReferenceImage;
+}
 
 interface FacetMeasurementDialogProps {
   readonly facetId: number;
   readonly modelFacetLengthMm: number;
-  readonly onApply: (measuredLengthMm: number) => void;
+  readonly onApply: (result: FacetMeasurementResult) => void;
   readonly onClose: () => void;
 }
 
@@ -19,18 +28,13 @@ export function FacetMeasurementDialog({
   const viewportRef = useRef<HTMLDivElement>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number } | undefined>(undefined);
   const [imageUrl, setImageUrl] = useState<string>();
+  const [imageSize, setImageSize] = useState<{ width: number; height: number }>();
   const [imageZoom, setImageZoom] = useState(1);
   const [imagePan, setImagePan] = useState({ x: 0, y: 0 });
   const [referenceDiameterMm, setReferenceDiameterMm] = useState(10);
   const [referenceDiameterPx, setReferenceDiameterPx] = useState(180);
   const [tool, setTool] = useState<MeasurementTool>('move');
   const [points, setPoints] = useState<MeasurementPoint[]>([]);
-
-  useEffect(() => () => {
-    if (imageUrl) {
-      URL.revokeObjectURL(imageUrl);
-    }
-  }, [imageUrl]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -53,13 +57,39 @@ export function FacetMeasurementDialog({
     if (!file) {
       return;
     }
-    if (imageUrl) {
-      URL.revokeObjectURL(imageUrl);
+    const reader = new FileReader();
+    reader.addEventListener('load', () => {
+      if (typeof reader.result !== 'string') {
+        return;
+      }
+      setImageUrl(reader.result);
+      setImageSize(undefined);
+      setImageZoom(1);
+      setImagePan({ x: 0, y: 0 });
+      setPoints([]);
+    });
+    reader.readAsDataURL(file);
+  };
+
+  const applyMeasurement = () => {
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (!measuredLengthMm || !imageUrl || !imageSize || !rect || rect.width <= 0 || rect.height <= 0) {
+      return;
     }
-    setImageUrl(URL.createObjectURL(file));
-    setImageZoom(1);
-    setImagePan({ x: 0, y: 0 });
-    setPoints([]);
+    onApply({
+      measuredLengthMm,
+      referenceImage: createPatternReferenceImage({
+        dataUrl: imageUrl,
+        naturalWidth: imageSize.width,
+        naturalHeight: imageSize.height,
+        viewportWidth: rect.width,
+        viewportHeight: rect.height,
+        imageZoom,
+        imagePan,
+        referenceDiameterMm,
+        referenceDiameterPx,
+      }),
+    });
   };
 
   const localPoint = (clientX: number, clientY: number): MeasurementPoint | undefined => {
@@ -122,6 +152,7 @@ export function FacetMeasurementDialog({
                 src={imageUrl}
                 alt="Measurement reference"
                 draggable={false}
+                onLoad={(event) => setImageSize({ width: event.currentTarget.naturalWidth, height: event.currentTarget.naturalHeight })}
                 style={{ transform: `translate(${imagePan.x}px, ${imagePan.y}px) scale(${imageZoom})` }}
               />
             ) : (
@@ -161,8 +192,8 @@ export function FacetMeasurementDialog({
               <button className="toolbarButton" disabled={points.length === 0} onClick={() => setPoints([])}>Clear points</button>
               <button
                 className="toolbarButton active"
-                disabled={!measuredLengthMm || measuredLengthMm <= 0}
-                onClick={() => measuredLengthMm && onApply(measuredLengthMm)}
+                disabled={!measuredLengthMm || measuredLengthMm <= 0 || !imageSize}
+                onClick={applyMeasurement}
               >
                 Scale STL
               </button>

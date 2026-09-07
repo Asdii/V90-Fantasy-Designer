@@ -11,7 +11,8 @@ import { normalizePattern, patternToCutPaths } from '../patterns/geometry/pathCo
 import { mirrorPrimitive, radialDuplicatePrimitives, transformPrimitive } from '../patterns/geometry/transforms';
 import { createRegularPolygonPrimitive } from '../patterns/editor/RegularPolygon';
 import { createCenteredRectanglePrimitive } from '../patterns/editor/Rectangle';
-import { snapEditorPoint } from '../patterns/editor/SnapEngine';
+import { snapEditorPoint, snapRegularShapePoint } from '../patterns/editor/SnapEngine';
+import type { PatternReferenceImage } from '../patterns/editor/PatternReferenceImage';
 import {
   createPatternViewportState,
   fitBoundsInViewport,
@@ -26,17 +27,20 @@ import {
 type DesignerTool = 'select' | 'line' | 'rectangle' | 'triangle' | 'pentagon' | 'hexagon';
 type PointerDrag =
   | { readonly type: 'pan'; readonly startClient: { readonly x: number; readonly y: number }; readonly startPan: { readonly x: number; readonly y: number } }
-  | { readonly type: 'move'; readonly startWorld: Vec2; readonly original: DesignPattern };
+  | { readonly type: 'move'; readonly startWorld: Vec2; readonly original: DesignPattern }
+  | { readonly type: 'referenceImage'; readonly startWorld: Vec2; readonly startCenter: Vec2 };
 
 interface PatternDesignerProps {
   readonly pattern: DesignPattern;
   readonly onPatternChange: (pattern: DesignPattern) => void;
+  readonly referenceImage?: PatternReferenceImage;
+  readonly onReferenceImageChange?: (image: PatternReferenceImage | undefined) => void;
 }
 
 const tools: DesignerTool[] = ['select', 'line', 'rectangle', 'triangle', 'hexagon', 'pentagon'];
 const gridOptions = [1, 0.5, 0.1];
 
-export function PatternDesigner({ pattern, onPatternChange }: PatternDesignerProps) {
+export function PatternDesigner({ pattern, onPatternChange, referenceImage, onReferenceImageChange }: PatternDesignerProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const undoStackRef = useRef<DesignPattern[]>([]);
   const redoStackRef = useRef<DesignPattern[]>([]);
@@ -63,6 +67,7 @@ export function PatternDesigner({ pattern, onPatternChange }: PatternDesignerPro
   const [transformRotation, setTransformRotation] = useState(0);
   const [transformScale, setTransformScale] = useState(1);
   const [showPatternData, setShowPatternData] = useState(false);
+  const [moveReferenceImage, setMoveReferenceImage] = useState(false);
 
   const selectedPrimitives = pattern.primitives.filter((primitive) => selectedIds.includes(primitive.id));
   const bounds = calculateDesignPatternBounds(pattern);
@@ -157,6 +162,13 @@ export function PatternDesigner({ pattern, onPatternChange }: PatternDesignerPro
             <input type="checkbox" checked={role === 'construction'} onChange={(event) => setRole(event.target.checked ? 'construction' : 'pattern')} />
             Construction
           </label>
+          <button
+            className={moveReferenceImage ? 'toolbarButton active' : 'toolbarButton'}
+            disabled={!referenceImage}
+            onClick={() => setMoveReferenceImage((current) => !current)}
+          >
+            Move Photo
+          </button>
         </div>
       </header>
       <section className="patternDesignerWorkspace">
@@ -176,6 +188,7 @@ export function PatternDesigner({ pattern, onPatternChange }: PatternDesignerPro
             onWheel={handleWheel}
           >
             <rect x="0" y="0" width="100%" height="100%" fill="#f7f8fa" />
+            {referenceImage ? renderReferenceImage(referenceImage) : null}
             {renderGrid()}
             <line x1="0" y1={toScreen({ x: 0, y: 0 }).y} x2={viewport.width} y2={toScreen({ x: 0, y: 0 }).y} className="axisLine xAxis" />
             <line x1={toScreen({ x: 0, y: 0 }).x} y1="0" x2={toScreen({ x: 0, y: 0 }).x} y2={viewport.height} className="axisLine yAxis" />
@@ -285,6 +298,19 @@ export function PatternDesigner({ pattern, onPatternChange }: PatternDesignerPro
               Reset View
             </button>
           </div>
+          {referenceImage ? (
+            <>
+              <h3>Reference Photo</h3>
+              <NumberInput
+                label="Opacity"
+                value={referenceImage.opacity}
+                min={0.05}
+                step={0.05}
+                onChange={(opacity) => onReferenceImageChange?.({ ...referenceImage, opacity: Math.min(1, Math.max(0.05, opacity)) })}
+              />
+              <button className="toolbarButton" onClick={() => onReferenceImageChange?.(undefined)}>Remove Photo</button>
+            </>
+          ) : null}
           <label className="wireframeToggle">
             <input type="checkbox" checked={showPatternData} onChange={(event) => setShowPatternData(event.target.checked)} />
             Pattern Data
@@ -296,7 +322,6 @@ export function PatternDesigner({ pattern, onPatternChange }: PatternDesignerPro
   );
 
   function handlePointerDown(event: React.PointerEvent<SVGSVGElement>) {
-    const point = getSnappedPoint(event);
     if (event.button === 1 || event.button === 2) {
       setDrag({
         type: 'pan',
@@ -305,6 +330,18 @@ export function PatternDesigner({ pattern, onPatternChange }: PatternDesignerPro
       });
       return;
     }
+
+    if (moveReferenceImage && referenceImage) {
+      setDrag({
+        type: 'referenceImage',
+        startWorld: getRawPoint(event),
+        startCenter: referenceImage.center,
+      });
+      event.currentTarget.setPointerCapture(event.pointerId);
+      return;
+    }
+
+    const point = getToolPoint(event);
 
     if (tool === 'select') {
       const hit = hitTest(point);
@@ -331,7 +368,20 @@ export function PatternDesigner({ pattern, onPatternChange }: PatternDesignerPro
       return;
     }
 
-    const point = getSnappedPoint(event);
+    if (drag?.type === 'referenceImage' && referenceImage) {
+      const raw = getRawPoint(event);
+      onReferenceImageChange?.({
+        ...referenceImage,
+        center: {
+          x: drag.startCenter.x + raw.x - drag.startWorld.x,
+          y: drag.startCenter.y + raw.y - drag.startWorld.y,
+        },
+      });
+      setCursor(raw);
+      return;
+    }
+
+    const point = getToolPoint(event);
     setCursor(point);
     if (pendingPoints.length === 1 && isShapeTool(tool)) {
       setShapeRotationDeg(event.ctrlKey || event.metaKey ? snapAngle(angleDeg(pendingPoints[0], point), 15) : undefined);
@@ -463,8 +513,25 @@ export function PatternDesigner({ pattern, onPatternChange }: PatternDesignerPro
   }
 
   function getSnappedPoint(event: React.PointerEvent<SVGSVGElement>): Vec2 {
-    const raw = toWorld(clientToViewportPoint(event.clientX, event.clientY));
+    const raw = getRawPoint(event);
     return snapEditorPoint(raw, pattern, { enabled: snapEnabled, gridSpacing, snapDistanceWorld: 10 / viewport.zoom }).point;
+  }
+
+  function getRawPoint(event: React.PointerEvent<SVGSVGElement>): Vec2 {
+    return toWorld(clientToViewportPoint(event.clientX, event.clientY));
+  }
+
+  function getToolPoint(event: React.PointerEvent<SVGSVGElement>): Vec2 {
+    if (pendingPoints.length === 1 && isRegularShapeTool(tool)) {
+      return snapRegularShapePoint(getRawPoint(event), pattern, {
+        center: pendingPoints[0],
+        enabled: snapEnabled,
+        gridSpacing,
+        snapDistanceWorld: 10 / viewport.zoom,
+        angleStepDeg: event.ctrlKey || event.metaKey ? 15 : undefined,
+      });
+    }
+    return getSnappedPoint(event);
   }
 
   function commitPatternChange(next: DesignPattern) {
@@ -535,6 +602,24 @@ export function PatternDesigner({ pattern, onPatternChange }: PatternDesignerPro
       lines.push(<line key={`gy-${y}`} x1="0" y1={screen.y} x2={viewport.width} y2={screen.y} className={major ? 'gridLine majorGridLine' : 'gridLine'} />);
     }
     return lines;
+  }
+
+  function renderReferenceImage(image: PatternReferenceImage) {
+    const width = image.naturalWidth * image.mmPerPixel;
+    const height = image.naturalHeight * image.mmPerPixel;
+    const topLeft = toScreen({ x: image.center.x - width / 2, y: image.center.y + height / 2 });
+    return (
+      <image
+        href={image.dataUrl}
+        x={topLeft.x}
+        y={topLeft.y}
+        width={width * viewport.zoom}
+        height={height * viewport.zoom}
+        opacity={image.opacity}
+        preserveAspectRatio="none"
+        pointerEvents="none"
+      />
+    );
   }
 
   function renderPrimitive(primitive: PatternPrimitive, selected: boolean, preview: boolean) {
@@ -724,6 +809,10 @@ function toolLabel(tool: DesignerTool) {
 
 function isShapeTool(tool: DesignerTool): tool is Exclude<DesignerTool, 'select' | 'line'> {
   return tool !== 'select' && tool !== 'line';
+}
+
+function isRegularShapeTool(tool: DesignerTool): tool is 'triangle' | 'pentagon' | 'hexagon' {
+  return tool === 'triangle' || tool === 'pentagon' || tool === 'hexagon';
 }
 
 function createShapePrimitive(

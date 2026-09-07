@@ -580,6 +580,13 @@ select {
   dominant-baseline: central;
 }
 
+.cutHelperIndexMarker {
+  fill: #d6a928;
+  stroke: #11161a;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
 .cutHelperRotatingStage {
   transform-box: view-box;
   transform-origin: 0 0;
