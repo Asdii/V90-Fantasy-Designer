@@ -5,8 +5,7 @@ export type CameraViewName =
   | 'front'
   | 'back'
   | 'left'
-  | 'right'
-  | 'inspection';
+  | 'right';
 
 export interface CameraSnapshot {
   readonly position: readonly [number, number, number];

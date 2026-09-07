@@ -46,6 +46,7 @@ import {
 interface ViewportProps {
   readonly background: BackgroundMode;
   readonly cameraViewRequest: CameraViewName;
+  readonly cameraRestoreRequest?: CameraSnapshot;
   readonly fitModelRequest: number;
   readonly facetDebugColors: boolean;
   readonly projectionMode: 'perspective' | 'orthographic';
@@ -94,7 +95,6 @@ const viewDirections: Record<CameraViewName, THREE.Vector3> = {
   back: new THREE.Vector3(0, 0, -1),
   left: new THREE.Vector3(-1, 0, 0),
   right: new THREE.Vector3(1, 0, 0),
-  inspection: new THREE.Vector3(0, 1, 0),
 };
 
 interface ViewportControls {
@@ -105,6 +105,7 @@ interface ViewportControls {
 export function Viewport({
   background,
   cameraViewRequest,
+  cameraRestoreRequest,
   fitModelRequest,
   facetDebugColors,
   projectionMode,
@@ -173,10 +174,23 @@ export function Viewport({
   const [pendingPoints, setPendingPoints] = useState<Vec2[]>([]);
   const [previewPoint, setPreviewPoint] = useState<Vec2 | undefined>();
   const [dragPreviewPattern, setDragPreviewPattern] = useState<Pattern | undefined>();
+  const [viewerReady, setViewerReady] = useState(false);
 
   cleanRenderRef.current = cleanRender;
   renderModeRef.current = renderMode;
   callbacksRef.current = { onCameraSnapshotChange, onFpsChange, onObjectCountChange, onRendererError };
+
+  useEffect(() => {
+    const camera = cameraRef.current;
+    const controls = controlsRef.current;
+    if (!camera || !controls || !cameraRestoreRequest) {
+      return;
+    }
+    camera.position.fromArray(cameraRestoreRequest.position);
+    controls.target.fromArray(cameraRestoreRequest.target);
+    camera.lookAt(controls.target);
+    controls.update();
+  }, [cameraRestoreRequest, viewerReady]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -235,6 +249,7 @@ export function Viewport({
     placedPatternRendererRef.current = placedPatternRenderer;
     vGroovePreviewRendererRef.current = vGroovePreviewRenderer;
     webGiRendererRef.current = webGiRenderer;
+    setViewerReady(true);
 
     let animationFrame = 0;
     let frames = 0;
@@ -263,6 +278,7 @@ export function Viewport({
       placedPatternRenderer.dispose();
       vGroovePreviewRenderer.dispose();
       webGiRendererRef.current = null;
+      setViewerReady(false);
       webGiRenderer.dispose();
     };
   }, []);
@@ -438,22 +454,12 @@ export function Viewport({
     const radius = boundingBox
       ? Math.max(new THREE.Vector3(boundingBox.size.x, boundingBox.size.y, boundingBox.size.z).length() / 2, 1)
       : 2;
-    const inspectionFacet = cameraViewRequest === 'inspection'
-      ? findInspectionFacet(project.geometry)
-      : undefined;
-    const direction = inspectionFacet
-      ? new THREE.Vector3(inspectionFacet.normal.x, inspectionFacet.normal.y, inspectionFacet.normal.z).normalize()
-      : viewDirections[cameraViewRequest].clone().normalize();
+    const direction = viewDirections[cameraViewRequest].clone().normalize();
     controls.target.copy(center);
     camera.position.copy(center.clone().add(direction.multiplyScalar(radius * 4)));
     camera.up.set(0, 1, 0);
     if (cameraViewRequest === 'top' || cameraViewRequest === 'bottom') {
       camera.up.set(0, 0, cameraViewRequest === 'top' ? -1 : 1);
-    } else if (cameraViewRequest === 'inspection') {
-      camera.up.set(0, 1, 0);
-      if (Math.abs(direction.dot(camera.up)) > 0.95) {
-        camera.up.set(0, 0, -1);
-      }
     }
     camera.lookAt(controls.target);
     controls.update();
@@ -838,17 +844,6 @@ function applyCleanRenderVisibility(scene: THREE.Scene, clean: boolean) {
     const keepVisible = object instanceof THREE.Camera || object.type.includes('Light') || object.name === 'Gem geometry';
     object.visible = keepVisible;
   });
-}
-
-function findInspectionFacet(geometry: GemProject['geometry']) {
-  if (!geometry || geometry.facets.length === 0) {
-    return undefined;
-  }
-
-  const upward = geometry.facets.filter((facet) => facet.normal.y > 0.5);
-  return (upward.length > 0 ? upward : geometry.facets).reduce((largest, facet) => (
-    facet.area > largest.area ? facet : largest
-  ));
 }
 
 function createPreviewSegments(

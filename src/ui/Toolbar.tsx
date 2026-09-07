@@ -4,14 +4,16 @@ import type { CameraViewName } from '../rendering/cameraViews';
 interface ToolbarProps {
   readonly background: BackgroundMode;
   readonly facetDebugColors: boolean;
-  readonly projectionMode: 'perspective' | 'orthographic';
+  readonly canExportModel: boolean;
   readonly showFacetBoundaries: boolean;
   readonly showFacetNormals: boolean;
   readonly showLocalWorkplane: boolean;
   readonly showWireframe: boolean;
   readonly onClearModel: () => void;
+  readonly onExportStl: () => void;
+  readonly onLoadProject: (file: File) => void;
+  readonly onSaveProject: () => void;
   readonly onBackgroundChange: (mode: BackgroundMode) => void;
-  readonly onProjectionModeChange: (mode: 'perspective' | 'orthographic') => void;
   readonly onCameraViewRequest: (view: CameraViewName) => void;
   readonly onFacetBoundariesChange: (enabled: boolean) => void;
   readonly onFacetDebugColorsChange: (enabled: boolean) => void;
@@ -30,20 +32,21 @@ const cameraViews: { label: string; view: CameraViewName }[] = [
   { label: 'Back', view: 'back' },
   { label: 'Left', view: 'left' },
   { label: 'Right', view: 'right' },
-  { label: 'Gem Inspection', view: 'inspection' },
 ];
 
 export function Toolbar({
   background,
   facetDebugColors,
-  projectionMode,
+  canExportModel,
   showFacetBoundaries,
   showFacetNormals,
   showLocalWorkplane,
   showWireframe,
   onClearModel,
+  onExportStl,
+  onLoadProject,
+  onSaveProject,
   onBackgroundChange,
-  onProjectionModeChange,
   onCameraViewRequest,
   onFacetBoundariesChange,
   onFacetDebugColorsChange,
@@ -71,6 +74,20 @@ export function Toolbar({
             }}
           />
         </label>
+        <label className="toolbarButton fileButton">
+          Load Project
+          <input
+            type="file"
+            accept=".v90project,application/json"
+            onChange={(event) => {
+              const file = event.target.files?.[0];
+              if (file) onLoadProject(file);
+              event.target.value = '';
+            }}
+          />
+        </label>
+        <button className="toolbarButton" onClick={onSaveProject}>Save Project</button>
+        <button className="toolbarButton" disabled={!canExportModel} onClick={onExportStl}>Export STL</button>
         <button className="toolbarButton" onClick={onClearModel}>
           Clear model
         </button>
@@ -85,21 +102,6 @@ export function Toolbar({
             {item.label}
           </button>
         ))}
-      </div>
-      <div className="toolbarGroup">
-        <span className="toolbarLabel">Projection</span>
-        <button
-          className={projectionMode === 'perspective' ? 'toolbarButton active' : 'toolbarButton'}
-          onClick={() => onProjectionModeChange('perspective')}
-        >
-          Perspective
-        </button>
-        <button
-          className={projectionMode === 'orthographic' ? 'toolbarButton active' : 'toolbarButton'}
-          onClick={() => onProjectionModeChange('orthographic')}
-        >
-          Orthographic
-        </button>
       </div>
       <div className="toolbarGroup">
         <span className="toolbarLabel">Background</span>

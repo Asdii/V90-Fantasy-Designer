@@ -1,5 +1,5 @@
 import { useEffect, type ReactNode } from 'react';
-import type { AppSettings, InterfaceDensity, InterfaceTextSize } from '../app/AppSettings';
+import type { AppSettings, AppTheme, GridContrast, InterfaceDensity, InterfaceTextSize, InterfaceVisibility } from '../app/AppSettings';
 
 interface AppSettingsDialogProps {
   readonly settings: AppSettings;
@@ -30,15 +30,19 @@ export function AppSettingsDialog({ settings, onChange, onClose }: AppSettingsDi
         </header>
 
         <div className="settingsBody">
-          <SettingRow label="High visibility">
-            <label className="settingsToggle">
-              <input
-                type="checkbox"
-                checked={settings.highVisibility}
-                onChange={(event) => onChange({ ...settings, highVisibility: event.target.checked })}
-              />
-              Strong panel borders
-            </label>
+          <SettingRow label="Theme">
+            <SegmentedSetting<AppTheme>
+              value={settings.theme}
+              options={[['deepOcean', 'Deep Ocean'], ['graphite', 'Graphite'], ['light', 'Light']]}
+              onChange={(theme) => onChange({ ...settings, theme })}
+            />
+          </SettingRow>
+          <SettingRow label="Section visibility">
+            <SegmentedSetting<InterfaceVisibility>
+              value={settings.visibility}
+              options={[['standard', 'Standard'], ['high', 'High'], ['strong', 'Strong']]}
+              onChange={(visibility) => onChange({ ...settings, visibility })}
+            />
           </SettingRow>
           <SettingRow label="Control density">
             <SegmentedSetting<InterfaceDensity>
@@ -50,9 +54,26 @@ export function AppSettingsDialog({ settings, onChange, onClose }: AppSettingsDi
           <SettingRow label="Text size">
             <SegmentedSetting<InterfaceTextSize>
               value={settings.textSize}
-              options={[['standard', 'Standard'], ['large', 'Large']]}
+              options={[['normal', 'Normal'], ['large', 'Large']]}
               onChange={(textSize) => onChange({ ...settings, textSize })}
             />
+          </SettingRow>
+          <SettingRow label="Designer grid">
+            <SegmentedSetting<GridContrast>
+              value={settings.gridContrast}
+              options={[['soft', 'Soft'], ['strong', 'Strong']]}
+              onChange={(gridContrast) => onChange({ ...settings, gridContrast })}
+            />
+          </SettingRow>
+          <SettingRow label="Status bar">
+            <label className="settingsToggle">
+              <input
+                type="checkbox"
+                checked={settings.showStatusBar}
+                onChange={(event) => onChange({ ...settings, showStatusBar: event.target.checked })}
+              />
+              Show camera and performance status
+            </label>
           </SettingRow>
           <SettingRow label="Motion">
             <label className="settingsToggle">
@@ -85,7 +106,7 @@ function SegmentedSetting<T extends string>({ value, options, onChange }: {
   readonly onChange: (value: T) => void;
 }) {
   return (
-    <div className="settingsSegments" role="group">
+    <div className={`settingsSegments settingsSegments-${options.length}`} role="group">
       {options.map(([option, label]) => (
         <button key={option} className={value === option ? 'toolbarButton active' : 'toolbarButton'} onClick={() => onChange(option)}>
           {label}

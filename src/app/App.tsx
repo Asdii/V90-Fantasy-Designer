@@ -8,6 +8,7 @@ import {
 import { createFacetLocalGeometry } from '../geometry/FacetLocalGeometry';
 import type { GemGeometry } from '../geometry/GemGeometry';
 import { parseStl } from '../geometry/stlParser';
+import { writeBinaryStl } from '../geometry/stlWriter';
 import {
   calculateVGrooveDimensions,
   createCutInstructions,
@@ -22,6 +23,13 @@ import type { GemProject } from '../project/GemProject';
 import { rebuildWorkingGemGeometry } from '../project/CutOperations';
 import { areCutPlaneNormalsCompatible } from '../project/CutPlaneLock';
 import { scaleGemProject } from '../project/scaleGemProject';
+import { loadWorkspaceCache, saveWorkspaceCache } from '../project/WorkspaceCache';
+import {
+  createWorkspaceSnapshot,
+  parseWorkspaceSnapshot,
+  serializeWorkspaceSnapshot,
+  type WorkspaceSnapshot,
+} from '../project/WorkspaceSnapshot';
 import type { Pattern } from '../patterns/Pattern';
 import { createEmptyDesignPattern, type DesignPattern } from '../patterns/model/PatternModel';
 import type { PatternReferenceImage } from '../patterns/editor/PatternReferenceImage';
@@ -63,7 +71,6 @@ export function App() {
   const [gemViewMode, setGemViewMode] = useState<'setup' | 'render'>('setup');
   const [cameraViewRequest, setCameraViewRequest] = useState<CameraViewName>('reset');
   const [fitModelRequest, setFitModelRequest] = useState(0);
-  const [projectionMode, setProjectionMode] = useState<'perspective' | 'orthographic'>('perspective');
   const [showWireframe, setShowWireframe] = useState(false);
   const [showFacetBoundaries, setShowFacetBoundaries] = useState(true);
   const [showFacetNormals, setShowFacetNormals] = useState(false);
@@ -90,6 +97,8 @@ export function App() {
     position: [0, 0, 0],
     target: [0, 0, 0],
   });
+  const [cameraRestoreRequest, setCameraRestoreRequest] = useState<CameraSnapshot | undefined>();
+  const cameraSnapshotRef = useRef(cameraSnapshot);
   const [objectCount, setObjectCount] = useState(0);
   const [fps, setFps] = useState(0);
   const [cutOperationState, setCutOperationState] = useState<CutOperationState>({ status: 'idle' });
@@ -100,10 +109,69 @@ export function App() {
   const cutOperationInProgressRef = useRef(false);
   const cutPreviewRequestRef = useRef(0);
   const latestProjectRef = useRef(project);
+  const [workspaceCacheReady, setWorkspaceCacheReady] = useState(false);
 
   latestProjectRef.current = project;
 
   useEffect(() => saveAppSettings(appSettings, window.localStorage), [appSettings]);
+
+  const workspaceSnapshot = useMemo(() => createWorkspaceSnapshot({
+    project,
+    designPattern,
+    patternReferenceImage,
+    patternPlacement,
+    selectedFacetId,
+    appSettings,
+    view: {
+      designerSize,
+      background,
+      environmentPreset,
+      cleanRender,
+      gemViewMode,
+      showWireframe,
+      showFacetBoundaries,
+      showFacetNormals,
+      facetDebugColors,
+      showLocalWorkplane,
+      camera: cameraSnapshot,
+    },
+    material: gemMaterial,
+    cut: {
+      settings: vGrooveSettings,
+      cutterPreset: vGrooveCutterPreset,
+      displayMode: vGrooveDisplayMode,
+      preview: showVGroovePreview,
+    },
+  }), [
+    appSettings, background, cleanRender, designPattern, designerSize, environmentPreset,
+    facetDebugColors, gemMaterial, gemViewMode, patternPlacement, patternReferenceImage,
+    project, selectedFacetId, showFacetBoundaries, showFacetNormals, showLocalWorkplane,
+    showVGroovePreview, showWireframe, vGrooveCutterPreset, vGrooveDisplayMode, vGrooveSettings,
+  ]);
+
+  useEffect(() => {
+    let active = true;
+    void loadWorkspaceCache()
+      .then((snapshot) => {
+        if (active && snapshot) applyWorkspaceSnapshot(snapshot);
+      })
+      .catch((error) => console.warn('[WorkspaceCache] Could not restore the previous session.', error))
+      .finally(() => {
+        if (active) setWorkspaceCacheReady(true);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceCacheReady) return;
+    const timer = window.setTimeout(() => {
+      void saveWorkspaceCache(withCamera(workspaceSnapshot, cameraSnapshotRef.current))
+        .catch((error) => console.warn('[WorkspaceCache] Could not save the current session.', error));
+    }, 500);
+    return () => window.clearTimeout(timer);
+  }, [workspaceCacheReady, workspaceSnapshot]);
 
   const cutHelperSteps = useMemo(() => {
     const referenceOperation = project.cutOperations[0];
@@ -250,7 +318,6 @@ export function App() {
     setShowCutHelper(false);
     setShowFacetMeasurement(false);
     setPatternReferenceImage(undefined);
-    setFitModelRequest((value) => value + 1);
   };
 
   const deselectFacet = () => {
@@ -468,13 +535,79 @@ export function App() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [activeWorkspace, project.cutOperations, project.geometry, project.sourceGeometry]);
 
+  function applyWorkspaceSnapshot(snapshot: WorkspaceSnapshot) {
+    const facetId = snapshot.selectedFacetId;
+    const validFacetId = facetId !== undefined
+      && snapshot.project.geometry?.facets.some((facet) => facet.id === facetId)
+      ? facetId
+      : undefined;
+    setProject({ ...snapshot.project, designPattern: snapshot.designPattern });
+    setDesignPattern(snapshot.designPattern);
+    setPatternReferenceImage(snapshot.patternReferenceImage);
+    setPatternPlacement(validFacetId !== undefined ? snapshot.patternPlacement : undefined);
+    setSelectedFacetId(validFacetId);
+    setHoveredFacetId(undefined);
+    setAppSettings(snapshot.appSettings);
+    setDesignerSize(snapshot.view.designerSize);
+    setBackground(snapshot.view.background);
+    setEnvironmentPreset(snapshot.view.environmentPreset);
+    setCleanRender(snapshot.view.cleanRender);
+    setGemViewMode(snapshot.view.gemViewMode);
+    setShowWireframe(snapshot.view.showWireframe);
+    setShowFacetBoundaries(snapshot.view.showFacetBoundaries);
+    setShowFacetNormals(snapshot.view.showFacetNormals);
+    setFacetDebugColors(snapshot.view.facetDebugColors);
+    setShowLocalWorkplane(snapshot.view.showLocalWorkplane);
+    if (snapshot.view.camera) {
+      setCameraSnapshot(snapshot.view.camera);
+      cameraSnapshotRef.current = snapshot.view.camera;
+      setCameraRestoreRequest(snapshot.view.camera);
+    }
+    setGemMaterial(snapshot.material);
+    setVGrooveSettings(snapshot.cut.settings);
+    setVGrooveCutterPreset(snapshot.cut.cutterPreset);
+    setVGrooveDisplayMode(snapshot.cut.displayMode);
+    setShowVGroovePreview(snapshot.cut.preview);
+    setShowCutHelper(false);
+    setShowFacetMeasurement(false);
+    setCutPreviewGeometry(undefined);
+    setCutOperationState({ status: 'idle' });
+    setImportError(undefined);
+    setFitModelRequest((value) => value + 1);
+  }
+
+  const saveProjectFile = () => {
+    const filename = project.source?.filename
+      ? `${stripExtension(project.source.filename)}.v90project`
+      : 'v90-fantasy-project.v90project';
+    downloadBlob(new Blob([serializeWorkspaceSnapshot(withCamera(workspaceSnapshot, cameraSnapshotRef.current))], { type: 'application/json' }), filename);
+  };
+
+  const loadProjectFile = async (file: File) => {
+    try {
+      const snapshot = parseWorkspaceSnapshot(await file.text());
+      applyWorkspaceSnapshot(snapshot);
+      await saveWorkspaceCache(snapshot);
+    } catch (error) {
+      setImportError(error instanceof Error ? error.message : 'Could not load the project file.');
+    }
+  };
+
+  const exportWorkingStl = () => {
+    if (!project.geometry) return;
+    const filename = project.source?.filename
+      ? `${stripExtension(project.source.filename)}-cut.stl`
+      : 'v90-fantasy-model.stl';
+    downloadBlob(new Blob([writeBinaryStl(project.geometry)], { type: 'model/stl' }), filename);
+  };
+
   const handleRendererError = useCallback((message: string) => {
     console.error('[WebGi]', message);
     setImportError(message);
   }, []);
 
   return (
-    <main className={`appShell visibility-${appSettings.highVisibility ? 'high' : 'standard'} density-${appSettings.density} textSize-${appSettings.textSize}${appSettings.reducedMotion ? ' reduceMotion' : ''}`}>
+    <main className={`appShell theme-${appSettings.theme} visibility-${appSettings.visibility} density-${appSettings.density} textSize-${appSettings.textSize} gridContrast-${appSettings.gridContrast}${appSettings.reducedMotion ? ' reduceMotion' : ''}`}>
       <header className="appTabs">
         <strong className="workspaceTitle">V90 Fantasy Designer</strong>
         <div className="designerSizeControls" role="group" aria-label="Pattern Designer size">
@@ -524,20 +657,17 @@ export function App() {
           <Toolbar
             background={background}
             facetDebugColors={facetDebugColors}
-            projectionMode={projectionMode}
+            canExportModel={Boolean(project.geometry)}
             showFacetBoundaries={showFacetBoundaries}
             showFacetNormals={showFacetNormals}
             showLocalWorkplane={showLocalWorkplane}
             showWireframe={showWireframe}
             onClearModel={clearModel}
+            onExportStl={exportWorkingStl}
+            onLoadProject={loadProjectFile}
+            onSaveProject={saveProjectFile}
             onBackgroundChange={setBackground}
-            onProjectionModeChange={setProjectionMode}
-            onCameraViewRequest={(view) => {
-              if (view === 'inspection') {
-                setProjectionMode('orthographic');
-              }
-              setCameraViewRequest(view);
-            }}
+            onCameraViewRequest={setCameraViewRequest}
             onFitModel={() => setFitModelRequest((value) => value + 1)}
             onLoadStl={loadStl}
             onFacetBoundariesChange={setShowFacetBoundaries}
@@ -551,8 +681,9 @@ export function App() {
               background={background}
               cutPreviewGeometry={showVGroovePreview ? cutPreviewGeometry : undefined}
               cameraViewRequest={cameraViewRequest}
+              cameraRestoreRequest={cameraRestoreRequest}
               fitModelRequest={fitModelRequest}
-              projectionMode={projectionMode}
+              projectionMode="perspective"
               project={project}
               designPattern={designPattern}
               gemMaterial={gemMaterial}
@@ -577,7 +708,10 @@ export function App() {
               snapEnabled={false}
               radialSymmetryEnabled={false}
               radialSymmetryOrder={1}
-              onCameraSnapshotChange={setCameraSnapshot}
+              onCameraSnapshotChange={(snapshot) => {
+                cameraSnapshotRef.current = snapshot;
+                setCameraSnapshot(snapshot);
+              }}
               onDeselectFacet={deselectFacet}
               onPatternCommit={commitPatternForFacet}
               onHoveredFacetChange={setHoveredFacetId}
@@ -621,7 +755,9 @@ export function App() {
               />
             </aside>
           </section>
-          <StatusBar camera={cameraSnapshot} objectCount={objectCount} fps={fps} localCursor={undefined} />
+          {appSettings.showStatusBar ? (
+            <StatusBar camera={cameraSnapshot} objectCount={objectCount} fps={fps} localCursor={undefined} />
+          ) : null}
         </section>
       </section>
       {showCutHelper && cutHelperSteps.length > 0 ? (
@@ -648,4 +784,21 @@ export function App() {
 
 function nextAnimationFrame() {
   return new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+function stripExtension(filename: string) {
+  return filename.replace(/\.[^.]+$/, '');
+}
+
+function downloadBlob(blob: Blob, filename: string) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 0);
+}
+
+function withCamera(snapshot: WorkspaceSnapshot, camera: CameraSnapshot): WorkspaceSnapshot {
+  return { ...snapshot, view: { ...snapshot.view, camera } };
 }

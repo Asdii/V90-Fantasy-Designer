@@ -81,7 +81,7 @@ export function GemPreviewPanel({
       {importError ? <p className="errorText">{importError}</p> : null}
       <dl>
         <dt>File</dt>
-        <dd>{project.source?.filename ?? 'Placeholder geometry'}</dd>
+        <dd>{project.source?.filename ?? 'Default cube'}</dd>
         <dt>Facets</dt>
         <dd>{geometry?.facets.length ?? 0}</dd>
         <dt>Selected</dt>

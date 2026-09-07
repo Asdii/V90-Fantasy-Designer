@@ -21,7 +21,7 @@ export function ModelInfoPanel({ project, importError, selectedFacetId }: ModelI
       {importError ? <p className="errorText">{importError}</p> : null}
       <dl>
         <dt>File</dt>
-        <dd>{project.source?.filename ?? 'Placeholder geometry'}</dd>
+        <dd>{project.source?.filename ?? 'Default cube'}</dd>
         <dt>Units</dt>
         <dd>mm (1 STL unit = 1 mm)</dd>
         <dt>Facets</dt>

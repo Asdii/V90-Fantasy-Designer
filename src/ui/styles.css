@@ -90,7 +90,16 @@ select {
 .textSize-large .patternPanel,
 .textSize-large .patternContextPanel,
 .textSize-large .statusBar {
-  font-size: 14px;
+  font-size: 16px;
+}
+
+.textSize-large .modelInfoPanel h2,
+.textSize-large .modelInfoPanel h3,
+.textSize-large .patternPanel h2,
+.textSize-large .patternPanel h3,
+.textSize-large .patternContextPanel h2,
+.textSize-large .patternContextPanel h3 {
+  font-size: 16px;
 }
 
 .reduceMotion *,
@@ -182,6 +191,159 @@ select {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 5px;
+}
+
+.settingsSegments-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.visibility-strong .appTabs,
+.visibility-strong .toolbar,
+.visibility-strong .designerPane,
+.visibility-strong .patternDesignerTabs,
+.visibility-strong .patternContextPanel,
+.visibility-strong .sidePanel,
+.visibility-strong .statusBar {
+  border-color: #b8c6d4;
+  border-width: 2px;
+}
+
+.visibility-strong .designerPane,
+.visibility-strong .gemPane,
+.visibility-strong .patternCanvasFrame,
+.visibility-strong .viewportShell,
+.visibility-strong .sidePanel {
+  box-shadow: inset 0 0 0 2px rgba(211, 224, 236, 0.58);
+}
+
+.visibility-strong .modelInfoPanel,
+.visibility-strong .patternPanel,
+.visibility-strong .patternContextPanel > h3 {
+  border: 1px solid #7f8f9f;
+}
+
+.visibility-strong .modelInfoPanel,
+.visibility-strong .patternPanel {
+  margin: 5px;
+}
+
+.visibility-strong .patternContextPanel > h3 {
+  margin-top: 14px;
+  padding: 7px;
+  background: rgba(126, 149, 170, 0.16);
+}
+
+.gridContrast-strong .gridLine {
+  stroke: #b4bdc8;
+}
+
+.gridContrast-strong .majorGridLine {
+  stroke: #8d99a6;
+  stroke-width: 1.2;
+}
+
+.gridContrast-strong .axisLine {
+  stroke-width: 2.2;
+}
+
+.theme-graphite {
+  background: #1c1d1f;
+}
+
+.theme-graphite .appTabs,
+.theme-graphite .toolbar,
+.theme-graphite .statusBar {
+  background: #242527;
+}
+
+.theme-graphite .patternDesignerTabs,
+.theme-graphite .patternContextPanel,
+.theme-graphite .sidePanel {
+  background: #202123;
+}
+
+.theme-graphite .toolbarButton,
+.theme-graphite .toolbarSelect {
+  background: #303236;
+}
+
+.theme-light {
+  color: #20252b;
+  background: #e6eaee;
+}
+
+.theme-light .appTabs,
+.theme-light .toolbar,
+.theme-light .statusBar,
+.theme-light .patternDesignerTabs {
+  border-color: #aeb8c2;
+  background: #f4f6f8;
+  color: #20252b;
+}
+
+.theme-light .patternContextPanel,
+.theme-light .sidePanel,
+.theme-light .modelInfoPanel,
+.theme-light .patternPanel {
+  border-color: #aeb8c2;
+  background: #eef1f4;
+  color: #20252b;
+}
+
+.theme-light .toolbarButton,
+.theme-light .toolbarSelect,
+.theme-light .numberRow input {
+  border-color: #9ba7b3;
+  background: #ffffff;
+  color: #20252b;
+}
+
+.theme-light .toolbarLabel,
+.theme-light .designerSizeControls,
+.theme-light .modelInfoPanel dt,
+.theme-light .patternPanel dt,
+.theme-light .patternContextPanel dt,
+.theme-light .modelInfoPanel p,
+.theme-light .patternPanel p,
+.theme-light .wireframeToggle {
+  color: #4f5b66;
+}
+
+.theme-light .modelInfoPanel h2,
+.theme-light .modelInfoPanel h3,
+.theme-light .patternPanel h2,
+.theme-light .patternPanel h3,
+.theme-light .patternContextPanel h2,
+.theme-light .patternContextPanel h3 {
+  color: #1d252c;
+}
+
+.theme-light .toolbarButton:hover,
+.theme-light .toolbarButton.active,
+.theme-light .toolbarSelect:hover {
+  border-color: #087da9;
+  background: #dceef6;
+}
+
+.theme-light .settingsDialog {
+  border-color: #8f9ba7;
+  background: #f4f6f8;
+  color: #20252b;
+}
+
+.theme-light .settingsHeader,
+.theme-light .settingsRow {
+  border-color: #b8c1ca;
+}
+
+.theme-light .settingsHeader h2,
+.theme-light .settingsRow > strong {
+  color: #20252b;
+}
+
+.theme-light .settingsHeader p,
+.theme-light .settingsToggle {
+  color: #4f5b66;
 }
 
 @media (max-width: 520px) {

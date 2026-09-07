@@ -7,7 +7,15 @@ describe('AppSettings', () => {
       getItem: () => JSON.stringify({ highVisibility: true, density: 'compact', textSize: 'large', reducedMotion: true }),
     };
 
-    expect(loadAppSettings(storage)).toEqual({ highVisibility: true, density: 'compact', textSize: 'large', reducedMotion: true });
+    expect(loadAppSettings(storage)).toEqual({
+      visibility: 'high',
+      theme: 'deepOcean',
+      density: 'compact',
+      textSize: 'large',
+      gridContrast: 'soft',
+      showStatusBar: true,
+      reducedMotion: true,
+    });
   });
 
   it('falls back safely when stored settings are invalid', () => {
@@ -18,7 +26,7 @@ describe('AppSettings', () => {
   it('persists settings under the versioned application key', () => {
     let storedKey = '';
     let storedValue = '';
-    saveAppSettings({ ...defaultAppSettings, highVisibility: true }, {
+    saveAppSettings({ ...defaultAppSettings, visibility: 'strong' }, {
       setItem: (key, value) => {
         storedKey = key;
         storedValue = value;
@@ -26,6 +34,6 @@ describe('AppSettings', () => {
     });
 
     expect(storedKey).toBe(APP_SETTINGS_STORAGE_KEY);
-    expect(JSON.parse(storedValue).highVisibility).toBe(true);
+    expect(JSON.parse(storedValue).visibility).toBe('strong');
   });
 });
