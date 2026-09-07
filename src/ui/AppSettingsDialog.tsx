@@ -33,7 +33,13 @@ export function AppSettingsDialog({ settings, onChange, onClose }: AppSettingsDi
           <SettingRow label="Theme">
             <SegmentedSetting<AppTheme>
               value={settings.theme}
-              options={[['deepOcean', 'Deep Ocean'], ['graphite', 'Graphite'], ['light', 'Light']]}
+              options={[
+                ['deepOcean', 'Deep Ocean'],
+                ['graphite', 'Graphite'],
+                ['jade', 'Jade'],
+                ['wine', 'Garnet'],
+                ['light', 'Light'],
+              ]}
               onChange={(theme) => onChange({ ...settings, theme })}
             />
           </SettingRow>

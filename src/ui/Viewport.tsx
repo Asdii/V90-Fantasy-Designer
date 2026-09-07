@@ -159,6 +159,7 @@ export function Viewport({
   const gemCacheKeyRef = useRef('working-gem-initial');
   const gemRenderRevisionRef = useRef(0);
   const renderModeRef = useRef(renderMode);
+  const geometryRef = useRef(project.geometry);
   const callbacksRef = useRef({
     onCameraSnapshotChange,
     onFpsChange,
@@ -175,9 +176,11 @@ export function Viewport({
   const [previewPoint, setPreviewPoint] = useState<Vec2 | undefined>();
   const [dragPreviewPattern, setDragPreviewPattern] = useState<Pattern | undefined>();
   const [viewerReady, setViewerReady] = useState(false);
+  const [scaleBarPixels, setScaleBarPixels] = useState(0);
 
   cleanRenderRef.current = cleanRender;
   renderModeRef.current = renderMode;
+  geometryRef.current = project.geometry;
   callbacksRef.current = { onCameraSnapshotChange, onFpsChange, onObjectCountChange, onRendererError };
 
   useEffect(() => {
@@ -264,6 +267,8 @@ export function Viewport({
         lastFpsUpdate = now;
         callbacksRef.current.onObjectCountChange(scene.children.length);
         callbacksRef.current.onCameraSnapshotChange(snapshotCamera(camera, controls.target));
+        const nextScaleBarPixels = calculateScaleBarPixels(camera, canvas, geometryRef.current, 10);
+        setScaleBarPixels((current) => Math.abs(current - nextScaleBarPixels) > 0.5 ? nextScaleBarPixels : current);
       }
 
       animationFrame = requestAnimationFrame(animate);
@@ -660,6 +665,12 @@ export function Viewport({
         onDoubleClick={handleDoubleClick}
         onContextMenu={handleContextMenu}
       />
+      {scaleBarPixels > 0 ? (
+        <div className="modelScaleReference" aria-label="10 millimeter model scale reference">
+          <span>10 mm</span>
+          <div className="modelScaleLine" style={{ width: `${scaleBarPixels}px` }} />
+        </div>
+      ) : null}
     </section>
   );
 
@@ -825,6 +836,25 @@ export function Viewport({
 
     return closest;
   }
+}
+
+function calculateScaleBarPixels(
+  camera: AppCamera,
+  canvas: HTMLCanvasElement,
+  geometry: GemGeometry | undefined,
+  lengthMm: number,
+) {
+  if (!geometry || canvas.clientWidth <= 0) return 0;
+  const center = new THREE.Vector3(
+    geometry.boundingBox.center.x,
+    geometry.boundingBox.center.y,
+    geometry.boundingBox.center.z,
+  );
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  const start = center.clone().addScaledVector(right, -lengthMm / 2).project(camera);
+  const end = center.clone().addScaledVector(right, lengthMm / 2).project(camera);
+  const pixels = Math.abs(end.x - start.x) * canvas.clientWidth / 2;
+  return Number.isFinite(pixels) ? Math.min(pixels, canvas.clientWidth * 0.7) : 0;
 }
 
 function applyCleanRenderVisibility(scene: THREE.Scene, clean: boolean) {

@@ -27,6 +27,13 @@ select {
   font: inherit;
 }
 
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid #52c7f5;
+  outline-offset: 2px;
+}
+
 .appShell {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -41,7 +48,14 @@ select {
 .visibility-high .patternDesignerTabs,
 .visibility-high .patternContextPanel,
 .visibility-high .sidePanel,
-.visibility-high .statusBar {
+.visibility-high .statusBar,
+.visibility-strong .appTabs,
+.visibility-strong .toolbar,
+.visibility-strong .designerPane,
+.visibility-strong .patternDesignerTabs,
+.visibility-strong .patternContextPanel,
+.visibility-strong .sidePanel,
+.visibility-strong .statusBar {
   border-color: #768391;
 }
 
@@ -49,13 +63,21 @@ select {
 .visibility-high .gemPane,
 .visibility-high .patternCanvasFrame,
 .visibility-high .viewportShell,
-.visibility-high .sidePanel {
+.visibility-high .sidePanel,
+.visibility-strong .designerPane,
+.visibility-strong .gemPane,
+.visibility-strong .patternCanvasFrame,
+.visibility-strong .viewportShell,
+.visibility-strong .sidePanel {
   box-shadow: inset 0 0 0 1px rgba(184, 197, 209, 0.34);
 }
 
 .visibility-high .modelInfoPanel h3,
 .visibility-high .patternPanel h3,
-.visibility-high .patternContextPanel h3 {
+.visibility-high .patternContextPanel h3,
+.visibility-strong .modelInfoPanel h3,
+.visibility-strong .patternPanel h3,
+.visibility-strong .patternContextPanel h3 {
   padding-top: 8px;
   border-top: 1px solid #53606d;
 }
@@ -197,6 +219,10 @@ select {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.settingsSegments-5 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .visibility-strong .appTabs,
 .visibility-strong .toolbar,
 .visibility-strong .designerPane,
@@ -220,6 +246,38 @@ select {
 .visibility-strong .patternPanel,
 .visibility-strong .patternContextPanel > h3 {
   border: 1px solid #7f8f9f;
+}
+
+.visibility-strong .toolbarButton,
+.visibility-strong .toolbarSelect,
+.visibility-strong input[type="number"],
+.visibility-strong input[type="text"],
+.visibility-strong input[type="color"] {
+  border-color: #b8c6d4;
+  border-width: 2px;
+}
+
+.visibility-strong input[type="range"] {
+  accent-color: #40c8ff;
+  filter: contrast(1.35) saturate(1.2);
+}
+
+.visibility-strong .toolbarLabel,
+.visibility-strong .workspaceTitle,
+.visibility-strong .modelInfoPanel h2,
+.visibility-strong .modelInfoPanel h3,
+.visibility-strong .patternPanel h2,
+.visibility-strong .patternPanel h3,
+.visibility-strong .patternContextPanel h2,
+.visibility-strong .patternContextPanel h3 {
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.visibility-strong input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: #31bff4;
 }
 
 .visibility-strong .modelInfoPanel,
@@ -246,8 +304,85 @@ select {
   stroke-width: 2.2;
 }
 
+.theme-deepOcean {
+  background: #0b1723;
+}
+
+.theme-deepOcean .appTabs,
+.theme-deepOcean .toolbar,
+.theme-deepOcean .statusBar {
+  background: #102438;
+}
+
+.theme-deepOcean .patternDesignerTabs,
+.theme-deepOcean .patternContextPanel,
+.theme-deepOcean .sidePanel {
+  background: #101d2a;
+}
+
+.theme-deepOcean .toolbarButton,
+.theme-deepOcean .toolbarSelect {
+  background: #1b3146;
+}
+
 .theme-graphite {
   background: #1c1d1f;
+}
+
+.theme-jade {
+  background: #111b19;
+}
+
+.theme-jade .appTabs,
+.theme-jade .toolbar,
+.theme-jade .statusBar {
+  background: #172925;
+}
+
+.theme-jade .patternDesignerTabs,
+.theme-jade .patternContextPanel,
+.theme-jade .sidePanel {
+  background: #15231f;
+}
+
+.theme-jade .toolbarButton,
+.theme-jade .toolbarSelect {
+  border-color: #466b61;
+  background: #233b35;
+}
+
+.theme-jade .toolbarButton:hover,
+.theme-jade .toolbarButton.active {
+  border-color: #71d3b7;
+  background: #2d4c44;
+}
+
+.theme-wine {
+  background: #1b1418;
+}
+
+.theme-wine .appTabs,
+.theme-wine .toolbar,
+.theme-wine .statusBar {
+  background: #2c1b23;
+}
+
+.theme-wine .patternDesignerTabs,
+.theme-wine .patternContextPanel,
+.theme-wine .sidePanel {
+  background: #24181e;
+}
+
+.theme-wine .toolbarButton,
+.theme-wine .toolbarSelect {
+  border-color: #72485b;
+  background: #3d2731;
+}
+
+.theme-wine .toolbarButton:hover,
+.theme-wine .toolbarButton.active {
+  border-color: #e19ab9;
+  background: #533441;
 }
 
 .theme-graphite .appTabs,
@@ -368,6 +503,9 @@ select {
 .workspaceTitle {
   margin-right: auto;
   white-space: nowrap;
+  padding-left: 9px;
+  border-left: 3px solid #4cc6f2;
+  letter-spacing: 0;
 }
 
 .designerSizeControls {
@@ -519,6 +657,32 @@ select {
   min-width: 0;
   min-height: 0;
   position: relative;
+}
+
+.modelScaleReference {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 4;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 7px 10px;
+  border: 1px solid rgba(232, 238, 244, 0.76);
+  border-radius: 6px;
+  background: rgba(14, 20, 27, 0.78);
+  color: #f5f7f9;
+  font: 11px/1.1 "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  pointer-events: none;
+}
+
+.modelScaleLine {
+  position: relative;
+  height: 7px;
+  min-width: 2px;
+  border-right: 1px solid #ffffff;
+  border-bottom: 2px solid #ffffff;
+  border-left: 1px solid #ffffff;
 }
 
 .modelInfoPanel {
@@ -1306,6 +1470,22 @@ select {
   margin: 0;
   color: #f0f3f6;
   font-family: "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+}
+
+.measurementNotice {
+  margin: 10px 0;
+  padding: 9px 10px;
+  border: 1px solid #4fae89;
+  border-radius: 6px;
+  background: rgba(50, 143, 108, 0.16);
+  color: #bcebd9;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.theme-light .measurementNotice {
+  color: #176847;
+  background: #e5f5ee;
 }
 
 .measurementActions {

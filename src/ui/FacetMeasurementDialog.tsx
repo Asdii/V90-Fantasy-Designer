@@ -19,6 +19,7 @@ interface FacetMeasurementDialogProps {
   readonly facetId: number;
   readonly modelFacetLengthMm: number;
   readonly facetGuide: FacetMeasurementGuide;
+  readonly statusMessage?: string;
   readonly onApply: (result: FacetMeasurementResult) => void;
   readonly onClose: () => void;
 }
@@ -37,6 +38,7 @@ export function FacetMeasurementDialog({
   facetId,
   modelFacetLengthMm,
   facetGuide,
+  statusMessage,
   onApply,
   onClose,
 }: FacetMeasurementDialogProps) {
@@ -215,6 +217,7 @@ export function FacetMeasurementDialog({
               <dt>Scale factor</dt>
               <dd>{measuredLengthMm ? (measuredLengthMm / modelFacetLengthMm).toFixed(6) : '—'}</dd>
             </dl>
+            {statusMessage ? <p className="measurementNotice" role="status">{statusMessage}</p> : null}
             <div className="measurementActions">
               <button className="toolbarButton" disabled={points.length === 0} onClick={() => setPoints([])}>Clear points</button>
               <button

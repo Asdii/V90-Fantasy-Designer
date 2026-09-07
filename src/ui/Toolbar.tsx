@@ -89,7 +89,7 @@ export function Toolbar({
         <button className="toolbarButton" onClick={onSaveProject}>Save Project</button>
         <button className="toolbarButton" disabled={!canExportModel} onClick={onExportStl}>Export STL</button>
         <button className="toolbarButton" onClick={onClearModel}>
-          Clear model
+          New project
         </button>
       </div>
       <div className="toolbarGroup">

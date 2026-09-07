@@ -1,7 +1,7 @@
 export type InterfaceDensity = 'comfortable' | 'compact';
 export type InterfaceTextSize = 'normal' | 'large';
 export type InterfaceVisibility = 'standard' | 'high' | 'strong';
-export type AppTheme = 'deepOcean' | 'graphite' | 'light';
+export type AppTheme = 'deepOcean' | 'graphite' | 'jade' | 'wine' | 'light';
 export type GridContrast = 'soft' | 'strong';
 
 export interface AppSettings {
@@ -59,7 +59,7 @@ function isVisibility(value: unknown): value is InterfaceVisibility {
 }
 
 function isTheme(value: unknown): value is AppTheme {
-  return value === 'deepOcean' || value === 'graphite' || value === 'light';
+  return value === 'deepOcean' || value === 'graphite' || value === 'jade' || value === 'wine' || value === 'light';
 }
 
 export function saveAppSettings(settings: AppSettings, storage?: Pick<Storage, 'setItem'>) {

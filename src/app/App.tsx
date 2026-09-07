@@ -105,6 +105,7 @@ export function App() {
   const [cutPreviewGeometry, setCutPreviewGeometry] = useState<GemGeometry | undefined>();
   const [showCutHelper, setShowCutHelper] = useState(false);
   const [showFacetMeasurement, setShowFacetMeasurement] = useState(false);
+  const [facetMeasurementMessage, setFacetMeasurementMessage] = useState<string>();
   const [patternReferenceImage, setPatternReferenceImage] = useState<PatternReferenceImage>();
   const cutOperationInProgressRef = useRef(false);
   const cutPreviewRequestRef = useRef(0);
@@ -112,6 +113,11 @@ export function App() {
   const [workspaceCacheReady, setWorkspaceCacheReady] = useState(false);
 
   latestProjectRef.current = project;
+
+  const handleCameraSnapshotChange = useCallback((snapshot: CameraSnapshot) => {
+    cameraSnapshotRef.current = snapshot;
+    setCameraSnapshot(snapshot);
+  }, []);
 
   useEffect(() => saveAppSettings(appSettings, window.localStorage), [appSettings]);
 
@@ -301,23 +307,32 @@ export function App() {
     }
   };
 
-  const clearModel = () => {
+  const newProject = () => {
+    if (!window.confirm('Start a new project? The current model, patterns, measurement photo, and cuts will be cleared.')) {
+      return;
+    }
     const placeholder = createPlaceholderGemGeometry();
-    setProject((current) => ({
-      ...current,
+    const emptyPattern = createEmptyDesignPattern();
+    setDesignPattern(emptyPattern);
+    setProject({
       version: 1,
       sourceGeometry: placeholder,
       geometry: placeholder,
-      source: undefined,
       cutOperations: [],
       patterns: {},
-    }));
+      designPattern: emptyPattern,
+    });
     setImportError(undefined);
     setSelectedFacetId(undefined);
     setHoveredFacetId(undefined);
+    setPatternPlacement(undefined);
     setShowCutHelper(false);
     setShowFacetMeasurement(false);
+    setFacetMeasurementMessage(undefined);
     setPatternReferenceImage(undefined);
+    setCutPreviewGeometry(undefined);
+    setShowVGroovePreview(true);
+    setFitModelRequest((value) => value + 1);
   };
 
   const deselectFacet = () => {
@@ -361,7 +376,7 @@ export function App() {
         scale: current.scale * factor,
       } : undefined);
       setImportError(undefined);
-      setShowFacetMeasurement(false);
+      setFacetMeasurementMessage(`STL scaled successfully. Maximum facet span is now ${measuredLengthMm.toFixed(3)} mm.`);
       setCutPreviewGeometry(undefined);
       setFitModelRequest((value) => value + 1);
     } catch (error) {
@@ -624,7 +639,10 @@ export function App() {
         <button
           className="toolbarButton"
           disabled={!measurementFacet || cutOperationState.status === 'running'}
-          onClick={() => setShowFacetMeasurement(true)}
+            onClick={() => {
+              setFacetMeasurementMessage(undefined);
+              setShowFacetMeasurement(true);
+            }}
         >
           Measure Facet
         </button>
@@ -662,7 +680,7 @@ export function App() {
             showFacetNormals={showFacetNormals}
             showLocalWorkplane={showLocalWorkplane}
             showWireframe={showWireframe}
-            onClearModel={clearModel}
+            onClearModel={newProject}
             onExportStl={exportWorkingStl}
             onLoadProject={loadProjectFile}
             onSaveProject={saveProjectFile}
@@ -708,10 +726,7 @@ export function App() {
               snapEnabled={false}
               radialSymmetryEnabled={false}
               radialSymmetryOrder={1}
-              onCameraSnapshotChange={(snapshot) => {
-                cameraSnapshotRef.current = snapshot;
-                setCameraSnapshot(snapshot);
-              }}
+              onCameraSnapshotChange={handleCameraSnapshotChange}
               onDeselectFacet={deselectFacet}
               onPatternCommit={commitPatternForFacet}
               onHoveredFacetChange={setHoveredFacetId}
@@ -771,6 +786,7 @@ export function App() {
           facetId={measurementFacet.id}
           modelFacetLengthMm={measurementFacet.lengthMm}
           facetGuide={measurementFacet.guide}
+          statusMessage={facetMeasurementMessage}
           onApply={applyFacetMeasurement}
           onClose={() => setShowFacetMeasurement(false)}
         />
