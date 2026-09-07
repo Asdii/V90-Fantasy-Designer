@@ -11,7 +11,7 @@ import { normalizePattern, patternToCutPaths } from '../patterns/geometry/pathCo
 import { mirrorPrimitive, radialDuplicatePrimitives, transformPrimitive } from '../patterns/geometry/transforms';
 import { createRegularPolygonPrimitive } from '../patterns/editor/RegularPolygon';
 import { createCenteredRectanglePrimitive } from '../patterns/editor/Rectangle';
-import { createRosePatternPrimitives } from '../patterns/editor/RosePattern';
+import { createGeometricStarPrimitive, createRadialBurstPrimitives } from '../patterns/editor/LinearPatternPresets';
 import { snapEditorPoint, snapRegularShapePoint } from '../patterns/editor/SnapEngine';
 import type { PatternReferenceImage } from '../patterns/editor/PatternReferenceImage';
 import {
@@ -70,10 +70,10 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
   const [transformScale, setTransformScale] = useState(1);
   const [showPatternData, setShowPatternData] = useState(false);
   const [moveReferenceImage, setMoveReferenceImage] = useState(false);
-  const [rosePetals, setRosePetals] = useState(8);
-  const [roseRadius, setRoseRadius] = useState(4);
-  const [roseLayers, setRoseLayers] = useState(1);
-  const [roseRotation, setRoseRotation] = useState(0);
+  const [presetCount, setPresetCount] = useState(8);
+  const [presetOuterRadius, setPresetOuterRadius] = useState(4);
+  const [presetInnerRadius, setPresetInnerRadius] = useState(2);
+  const [presetRotation, setPresetRotation] = useState(0);
 
   const selectedPrimitives = pattern.primitives.filter((primitive) => selectedIds.includes(primitive.id));
   const bounds = calculateDesignPatternBounds(pattern);
@@ -289,23 +289,39 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
           ) : (
             <p>Select geometry to edit properties or transforms.</p>
           )}
-          <h3>Decorative Rose</h3>
-          <NumberInput label="Petals" value={rosePetals} min={3} step={1} onChange={setRosePetals} />
-          <NumberInput label="Radius" value={roseRadius} min={0.001} step={0.1} onChange={setRoseRadius} />
-          <NumberInput label="Layers" value={roseLayers} min={1} max={6} step={1} onChange={setRoseLayers} />
-          <NumberInput label="Rotation" value={roseRotation} step={1} onChange={setRoseRotation} />
-          <button
-            className="toolbarButton"
-            onClick={() => appendPrimitives(createRosePatternPrimitives({
-              petals: rosePetals,
-              radius: roseRadius,
-              layers: roseLayers,
-              rotationDeg: roseRotation,
-              role,
-            }))}
-          >
-            Add Rose
-          </button>
+          <h3>Straight Patterns</h3>
+          <div className="patternPresetGrid">
+            <NumberInput label="Points" value={presetCount} min={3} max={64} step={1} onChange={setPresetCount} />
+            <NumberInput label="Outer radius" value={presetOuterRadius} min={0.001} step={0.1} onChange={setPresetOuterRadius} />
+            <NumberInput label="Inner radius" value={presetInnerRadius} min={0} step={0.1} onChange={setPresetInnerRadius} />
+            <NumberInput label="Rotation" value={presetRotation} step={1} onChange={setPresetRotation} />
+          </div>
+          <div className="patternControls">
+            <button
+              className="toolbarButton"
+              onClick={() => appendPrimitives([createGeometricStarPrimitive({
+                points: presetCount,
+                outerRadius: presetOuterRadius,
+                innerRadius: presetInnerRadius,
+                rotationDeg: presetRotation,
+                role,
+              })])}
+            >
+              Add Star
+            </button>
+            <button
+              className="toolbarButton"
+              onClick={() => appendPrimitives(createRadialBurstPrimitives({
+                count: presetCount,
+                outerRadius: presetOuterRadius,
+                innerRadius: presetInnerRadius,
+                rotationDeg: presetRotation,
+                role,
+              }))}
+            >
+              Add Radials
+            </button>
+          </div>
           <h3>Actions</h3>
           <div className="patternControls">
             <button className="toolbarButton" onClick={duplicateSelection} disabled={selectedPrimitives.length === 0}>

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { FacetLocalGeometry } from '../geometry/FacetLocalGeometry';
 import {
+  calculateCutHelperPatternOffset,
   calculateCutHelperStageRotation,
   type CutHelperDirection,
   type CutInstruction,
@@ -38,9 +39,9 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
   }, [steps.length]);
 
   useEffect(() => {
-    const frame = requestAnimationFrame(() => setOrientationDeg(instruction ? calculateCutHelperStageRotation(instruction.angleDeg, cutDirection) : 0));
+    const frame = requestAnimationFrame(() => setOrientationDeg(instruction ? calculateCutHelperStageRotation(instruction.angleDeg) : 0));
     return () => cancelAnimationFrame(frame);
-  }, [activeIndex, cutDirection, instruction]);
+  }, [activeIndex, instruction]);
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -80,7 +81,7 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
               <button className={cutDirection === 'horizontal' ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setCutDirection('horizontal')}>Horizontal →</button>
               <button className={cutDirection === 'vertical' ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setCutDirection('vertical')}>Vertical ↑</button>
             </div>
-            <button className="toolbarButton" disabled={!instruction} onClick={() => setOrientationDeg(instruction ? calculateCutHelperStageRotation(instruction.angleDeg, cutDirection) : 0)}>Orient to cut</button>
+            <button className="toolbarButton" disabled={!instruction} onClick={() => setOrientationDeg(instruction ? calculateCutHelperStageRotation(instruction.angleDeg) : 0)}>Orient to cut</button>
             <button className="toolbarButton" onClick={() => setOrientationDeg(0)}>Return to 0°</button>
             <button className="toolbarButton" onClick={onClose} aria-label="Close Cut Helper">Close</button>
           </div>
@@ -90,10 +91,10 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
           {instruction && activeStep && viewport ? (
             <svg viewBox={viewport.viewBox} preserveAspectRatio="xMidYMid meet" aria-label={`Cut ${instruction.step} preview`}>
               <defs>
-                <marker id="cut-helper-arrow" markerWidth="7" markerHeight="7" refX="5.5" refY="3.5" orient="auto" markerUnits="strokeWidth">
+                <marker id="cut-helper-arrow" markerWidth={viewport.hairline * 8} markerHeight={viewport.hairline * 8} refX="5.5" refY="3.5" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 7 7">
                   <path d="M0,0 L7,3.5 L0,7 Z" fill="#101820" />
                 </marker>
-                <marker id="cut-helper-completed-arrow" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto" markerUnits="strokeWidth">
+                <marker id="cut-helper-completed-arrow" markerWidth={viewport.hairline * 5} markerHeight={viewport.hairline * 5} refX="5" refY="3" orient="auto" markerUnits="userSpaceOnUse" viewBox="0 0 6 6">
                   <path d="M0,0 L6,3 L0,6 Z" fill="#347b98" />
                 </marker>
               </defs>
@@ -118,23 +119,28 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
                 <line x1="0" y1={viewport.y} x2="0" y2={viewport.y + viewport.height} className="cutHelperAxis cutHelperAxisY" />
                 <polygon points={activeStep.localGeometry.boundary.map((point) => `${point.u},${-point.v}`).join(' ')} className="cutHelperFacet" />
 
-                {completedSteps.flatMap((completed) => completed.instruction.visibleSegments.map((segment) => (
-                  <line
-                    key={`completed-${completed.operationId}-${completed.instruction.step}-${segment.id}`}
-                    x1={segment.start.u} y1={-segment.start.v}
-                    x2={segment.end.u} y2={-segment.end.v}
-                    className="cutHelperCompletedCut"
-                    style={{ strokeWidth: Math.max(completed.grooveWidthMm, viewport.hairline * 2) }}
-                    markerEnd="url(#cut-helper-completed-arrow)"
-                  />
-                )))}
+                <g
+                  className="cutHelperPatternStage"
+                  style={{ transform: `rotate(${calculateCutHelperPatternOffset(cutDirection)}deg)` }}
+                >
+                  {completedSteps.flatMap((completed) => completed.instruction.visibleSegments.map((segment) => (
+                    <line
+                      key={`completed-${completed.operationId}-${completed.instruction.step}-${segment.id}`}
+                      x1={segment.start.u} y1={-segment.start.v}
+                      x2={segment.end.u} y2={-segment.end.v}
+                      className="cutHelperCompletedCut"
+                      style={{ strokeWidth: viewport.hairline * 1.25 }}
+                      markerEnd="url(#cut-helper-completed-arrow)"
+                    />
+                  )))}
 
-                {instruction.visibleSegments.map((segment) => (
-                  <g key={`active-${segment.id}`}>
-                    <line x1={segment.start.u} y1={-segment.start.v} x2={segment.end.u} y2={-segment.end.v} className="cutHelperActiveOpening" style={{ strokeWidth: Math.max(activeStep.grooveWidthMm, viewport.hairline * 3) }} />
-                    <line x1={segment.start.u} y1={-segment.start.v} x2={segment.end.u} y2={-segment.end.v} className="cutHelperActiveCenter" style={{ strokeWidth: viewport.hairline }} markerEnd="url(#cut-helper-arrow)" />
-                  </g>
-                ))}
+                  {instruction.visibleSegments.map((segment) => (
+                    <g key={`active-${segment.id}`}>
+                      <line x1={segment.start.u} y1={-segment.start.v} x2={segment.end.u} y2={-segment.end.v} className="cutHelperActiveOpening" style={{ strokeWidth: Math.max(activeStep.grooveWidthMm, viewport.hairline * 3) }} />
+                      <line x1={segment.start.u} y1={-segment.start.v} x2={segment.end.u} y2={-segment.end.v} className="cutHelperActiveCenter" style={{ strokeWidth: viewport.hairline }} markerEnd="url(#cut-helper-arrow)" />
+                    </g>
+                  ))}
+                </g>
                 <circle cx="0" cy="0" r={viewport.hairline * 2.4} className="cutHelperOrigin" />
               </g>
               <path

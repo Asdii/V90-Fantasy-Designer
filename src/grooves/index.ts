@@ -3,6 +3,7 @@ export { generateVGrooveCutterGeometry } from './VGrooveCutterGeometry';
 export { generateVGroovePreviewGeometry } from './VGrooveGenerator';
 export {
   calculateCutAngleDeg,
+  calculateCutHelperPatternOffset,
   calculateCutHelperStageRotation,
   calculateLineDistanceFromOriginMm,
   createCutInstructions,

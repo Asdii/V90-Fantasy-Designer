@@ -29,8 +29,12 @@ export interface CutHelperSnapshot {
 
 export type CutHelperDirection = 'horizontal' | 'vertical';
 
-export function calculateCutHelperStageRotation(angleDeg: number, direction: CutHelperDirection) {
-  return angleDeg + (direction === 'vertical' ? -90 : 0);
+export function calculateCutHelperStageRotation(angleDeg: number) {
+  return angleDeg;
+}
+
+export function calculateCutHelperPatternOffset(direction: CutHelperDirection) {
+  return direction === 'vertical' ? -90 : 0;
 }
 
 export function createCutInstructions(

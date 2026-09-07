@@ -466,7 +466,7 @@ export function App() {
   return (
     <main className="appShell">
       <header className="appTabs">
-        <strong className="workspaceTitle">Pattern + Gem</strong>
+        <strong className="workspaceTitle">V90 Fantasy Designer</strong>
         <div className="designerSizeControls" role="group" aria-label="Pattern Designer size">
           <span>Designer</span>
           {(['small', 'medium', 'large'] as const).map((size) => (
