@@ -223,6 +223,211 @@ input:focus-visible {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
+.helpBackdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(4, 7, 10, 0.76);
+}
+
+.helpDialog {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(900px, calc(100vw - 32px));
+  max-height: min(820px, calc(100vh - 32px));
+  overflow: hidden;
+  border: 1px solid #4a5561;
+  border-radius: 8px;
+  background: #171b20;
+  color: #e8edf2;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.52);
+}
+
+.helpHeader,
+.helpActions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+}
+
+.helpHeader {
+  border-bottom: 1px solid #343b43;
+}
+
+.helpHeader h2,
+.helpHeader p,
+.helpContent h3,
+.helpContent p {
+  margin: 0;
+}
+
+.helpHeader h2 {
+  font-size: 17px;
+}
+
+.helpHeader p {
+  margin-top: 3px;
+  color: #9da7b1;
+  font-size: 11px;
+}
+
+.helpContent {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px;
+}
+
+.helpContent h3 {
+  margin-bottom: 10px;
+  color: #f2f5f7;
+  font-size: 13px;
+}
+
+.helpWorkflow {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding-left: 24px;
+}
+
+.helpWorkflow li {
+  padding-left: 4px;
+}
+
+.helpWorkflow strong,
+.helpWorkflow span {
+  display: block;
+}
+
+.helpWorkflow strong,
+.helpRequirements dt {
+  color: #e8edf2;
+  font-size: 12px;
+}
+
+.helpWorkflow span,
+.helpRequirements dd,
+.helpNotes p {
+  color: #aab4be;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.helpRequirements {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  border: 1px solid #343b43;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.helpRequirements > div {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 12px;
+  padding: 9px 10px;
+  border-bottom: 1px solid #2c333a;
+}
+
+.helpRequirements > div:last-child {
+  border-bottom: 0;
+}
+
+.helpRequirements dd {
+  margin: 0;
+}
+
+.helpControlGuide > div {
+  grid-template-columns: 110px minmax(0, 1fr);
+}
+
+.helpNotes {
+  align-self: start;
+  padding: 12px;
+  border-left: 3px solid #4cc6f2;
+  background: rgba(76, 198, 242, 0.07);
+}
+
+.helpNotes p + p {
+  margin-top: 8px;
+}
+
+.helpActions {
+  justify-content: flex-end;
+  border-top: 1px solid #343b43;
+}
+
+.guidedTour {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+}
+
+.guidedTourShade,
+.guidedTourSpotlight {
+  position: fixed;
+  border-radius: 7px;
+  pointer-events: none;
+}
+
+.guidedTourShade {
+  inset: 0;
+  background: rgba(2, 5, 8, 0.78);
+}
+
+.guidedTourSpotlight {
+  z-index: 1;
+  border: 2px solid #64d4ff;
+  background: rgba(255, 255, 255, 0.03);
+  box-shadow: 0 0 0 9999px rgba(2, 5, 8, 0.78), 0 0 0 4px rgba(76, 198, 242, 0.22);
+  transition: left 180ms ease, top 180ms ease, width 180ms ease, height 180ms ease;
+}
+
+.guidedTourCard {
+  position: fixed;
+  z-index: 2;
+  padding: 15px;
+  border: 1px solid #5b6976;
+  border-radius: 8px;
+  background: #171b20;
+  color: #e9eef3;
+  box-shadow: 0 18px 60px rgba(0, 0, 0, 0.58);
+}
+
+.guidedTourProgress {
+  color: #68d4fa;
+  font: 10px/1.2 "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  text-transform: uppercase;
+}
+
+.guidedTourCard h2 {
+  margin: 7px 0 6px;
+  font-size: 16px;
+}
+
+.guidedTourCard p {
+  margin: 0;
+  color: #b6c0ca;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.guidedTourActions {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: 7px;
+  margin-top: 14px;
+}
+
 .visibility-strong .appTabs,
 .visibility-strong .toolbar,
 .visibility-strong .designerPane,
@@ -481,10 +686,60 @@ input:focus-visible {
   color: #4f5b66;
 }
 
+.theme-light .helpDialog,
+.theme-light .guidedTourCard {
+  border-color: #aeb9c4;
+  background: #f7f9fb;
+  color: #20252b;
+}
+
+.theme-light .helpHeader,
+.theme-light .helpActions,
+.theme-light .helpRequirements,
+.theme-light .helpRequirements > div {
+  border-color: #cbd3db;
+}
+
+.theme-light .helpHeader h2,
+.theme-light .helpContent h3,
+.theme-light .helpWorkflow strong,
+.theme-light .helpRequirements dt,
+.theme-light .guidedTourCard h2 {
+  color: #20252b;
+}
+
+.theme-light .helpHeader p,
+.theme-light .helpWorkflow span,
+.theme-light .helpRequirements dd,
+.theme-light .helpNotes p,
+.theme-light .guidedTourCard p {
+  color: #55616d;
+}
+
 @media (max-width: 520px) {
   .settingsRow {
     grid-template-columns: minmax(0, 1fr);
     gap: 8px;
+  }
+
+  .helpBackdrop {
+    padding: 8px;
+  }
+
+  .helpDialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+  }
+
+  .helpContent {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 14px;
+  }
+
+  .helpRequirements > div,
+  .helpControlGuide > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 3px;
   }
 }
 

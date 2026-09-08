@@ -60,7 +60,7 @@ export function Toolbar({
     <header className="toolbar">
       <div className="toolbarGroup">
         <span className="toolbarLabel">File</span>
-        <label className="toolbarButton fileButton">
+        <label className="toolbarButton fileButton" data-tour="load-stl">
           Load STL
           <input
             type="file"

@@ -76,7 +76,7 @@ export function GemPreviewPanel({
   const grooveDimensions = calculateVGrooveDimensions(vGrooveSettings);
 
   return (
-    <aside className="modelInfoPanel">
+    <aside className="modelInfoPanel" data-tour="gem-controls">
       <h2>Gem</h2>
       {importError ? <p className="errorText">{importError}</p> : null}
       <dl>
@@ -248,7 +248,7 @@ export function GemPreviewPanel({
         Preview cuts
       </label>
       <div className="patternControls">
-        <button className="toolbarButton" disabled={!placement || patternPrimitiveCount === 0 || cutOperationState.status === 'running'} onClick={onCreateCuts}>
+        <button data-tour="create-cuts" className="toolbarButton" disabled={!placement || patternPrimitiveCount === 0 || cutOperationState.status === 'running'} onClick={onCreateCuts}>
           {cutOperationState.status === 'running' ? 'Creating cuts...' : 'Create Cuts'}
         </button>
         <button className="toolbarButton" disabled={project.cutOperations.length === 0 || cutOperationState.status === 'running'} onClick={onUndoLastCut}>

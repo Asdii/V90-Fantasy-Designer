@@ -649,7 +649,7 @@ export function Viewport({
   };
 
   return (
-    <section className="viewportShell" aria-label="3D viewport">
+    <section className="viewportShell" aria-label="3D viewport" data-tour="gem-viewport">
       <canvas
         ref={canvasRef}
         className="viewportCanvas"

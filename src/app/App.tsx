@@ -53,6 +53,8 @@ import { GemPreviewPanel } from '../ui/GemPreviewPanel';
 import { CutHelperDialog } from '../ui/CutHelperDialog';
 import { FacetMeasurementDialog, type FacetMeasurementResult } from '../ui/FacetMeasurementDialog';
 import { AppSettingsDialog } from '../ui/AppSettingsDialog';
+import { HelpDialog } from '../ui/HelpDialog';
+import { GuidedTour, type GuidedTourStep } from '../ui/GuidedTour';
 import { PatternDesigner } from '../ui/PatternDesigner';
 import { StatusBar } from '../ui/StatusBar';
 import { Toolbar } from '../ui/Toolbar';
@@ -62,9 +64,50 @@ type WorkspaceArea = 'pattern' | 'gem';
 type DesignerSize = 'small' | 'medium' | 'large';
 type CutOperationState = { readonly status: 'idle' | 'running' | 'success' | 'error'; readonly message?: string };
 
+const GUIDED_TOUR_STORAGE_KEY = 'v90-fantasy-designer-tour-complete';
+const guidedTourSteps: readonly GuidedTourStep[] = [
+  {
+    title: 'Load your gemstone',
+    description: 'Begin with an STL exported from Gem Cut Studio. Loading a model starts a fresh cutting workspace.',
+    target: '[data-tour="load-stl"]',
+  },
+  {
+    title: 'Select the cutting facet',
+    description: 'Rotate the gemstone and click the flat facet where the design will be cut. Selection uses the nearest visible surface.',
+    target: '[data-tour="gem-viewport"]',
+  },
+  {
+    title: 'Calibrate its real size',
+    description: 'Measure Facet becomes available after selecting a facet. Match a known circular reference, mark the highlighted longest span, then scale the STL.',
+    target: '[data-tour="measure-facet"]',
+  },
+  {
+    title: 'Draw the cutting pattern',
+    description: 'Build the pattern with straight lines and polygons. The measurement photo is aligned here with its measured midpoint at pattern origin (0,0).',
+    target: '[data-tour="pattern-designer"]',
+  },
+  {
+    title: 'Place and preview the cuts',
+    description: 'Adjust pattern position, rotation, scale and cut depth in the right panel. Preview cuts is temporary and updates live.',
+    target: '[data-tour="gem-controls"]',
+  },
+  {
+    title: 'Create the real cuts',
+    description: 'Create Cuts commits the preview to the working gemstone. Save Project preserves it and Export STL writes the resulting mesh.',
+    target: '[data-tour="create-cuts"]',
+  },
+  {
+    title: 'Follow the manual sequence',
+    description: 'Cut Helper becomes available after a real cut exists. It presents every line in order with angle, center distance and depth.',
+    target: '[data-tour="cut-helper"]',
+  },
+];
+
 export function App() {
   const [appSettings, setAppSettings] = useState(() => loadAppSettings(window.localStorage));
   const [showAppSettings, setShowAppSettings] = useState(false);
+  const [showHelp, setShowHelp] = useState(false);
+  const [showGuidedTour, setShowGuidedTour] = useState(() => window.localStorage.getItem(GUIDED_TOUR_STORAGE_KEY) !== 'true');
   const [activeWorkspace, setActiveWorkspace] = useState<WorkspaceArea>('pattern');
   const [designerSize, setDesignerSize] = useState<DesignerSize>('medium');
   const [background, setBackground] = useState<BackgroundMode>('white');
@@ -630,6 +673,16 @@ export function App() {
     setImportError(message);
   }, []);
 
+  const closeGuidedTour = () => {
+    window.localStorage.setItem(GUIDED_TOUR_STORAGE_KEY, 'true');
+    setShowGuidedTour(false);
+  };
+
+  const startGuidedTour = () => {
+    setShowHelp(false);
+    setShowGuidedTour(true);
+  };
+
   return (
     <main className={`appShell theme-${appSettings.theme} visibility-${appSettings.visibility} density-${appSettings.density} textSize-${appSettings.textSize} gridContrast-${appSettings.gridContrast}${appSettings.reducedMotion ? ' reduceMotion' : ''}`}>
       <header className="appTabs">
@@ -642,11 +695,12 @@ export function App() {
             </button>
           ))}
         </div>
-        <button className="toolbarButton" disabled={cutHelperSteps.length === 0} onClick={() => setShowCutHelper(true)}>
+        <button data-tour="cut-helper" className="toolbarButton" disabled={cutHelperSteps.length === 0} onClick={() => setShowCutHelper(true)}>
           Cut Helper
         </button>
         <button
           className="toolbarButton"
+          data-tour="measure-facet"
           disabled={!measurementFacet || cutOperationState.status === 'running'}
             onClick={() => {
               setFacetMeasurementMessage(undefined);
@@ -658,11 +712,15 @@ export function App() {
         <button className="toolbarButton" onClick={() => setShowAppSettings(true)}>
           Settings
         </button>
+        <button className="toolbarButton" onClick={() => setShowHelp(true)}>
+          Help
+        </button>
       </header>
 
       <section className={`combinedWorkspace designerSize-${designerSize}`}>
         <section
           className="designerPane"
+          data-tour="pattern-designer"
           aria-label="Pattern Designer"
           onFocusCapture={() => setActiveWorkspace('pattern')}
           onPointerDownCapture={() => setActiveWorkspace('pattern')}
@@ -805,6 +863,8 @@ export function App() {
       {showAppSettings ? (
         <AppSettingsDialog settings={appSettings} onChange={setAppSettings} onClose={() => setShowAppSettings(false)} />
       ) : null}
+      {showHelp ? <HelpDialog onClose={() => setShowHelp(false)} onStartTour={startGuidedTour} /> : null}
+      {showGuidedTour ? <GuidedTour steps={guidedTourSteps} onClose={closeGuidedTour} /> : null}
     </main>
   );
 }
