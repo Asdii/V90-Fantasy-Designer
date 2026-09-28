@@ -15,6 +15,9 @@ export interface MeshBuildOptions {
   readonly weldEpsilonMm?: number;
 }
 
+const ADAPTIVE_WELD_RATIOS = [0.00001, 0.00005, 0.0001, 0.00025, 0.0005] as const;
+const MAX_ADAPTIVE_WELD_MM = 0.01;
+
 export interface IndexedTriangle {
   readonly a: number;
   readonly b: number;
@@ -81,6 +84,54 @@ export function createGemGeometryFromTriangleSoup(
     boundingBox,
     warnings: [...warnings, ...orientation.warnings, ...facetDetection.topology.warnings],
   };
+}
+
+/**
+ * Repairs tiny STL export seams while keeping the normal precision for meshes
+ * that are already closed. The tolerance grows only until a closed candidate
+ * is found and is capped to avoid merging intentional model features.
+ */
+export function createGemGeometryFromTriangleSoupWithRepair(
+  triangleSoup: TriangleSoup,
+  options: MeshBuildOptions = {},
+): GemGeometry {
+  const initial = createGemGeometryFromTriangleSoup(triangleSoup, options);
+  if (!hasFatalTopologyWarning(initial) || options.weldEpsilonMm !== undefined) {
+    return initial;
+  }
+
+  const modelSize = Math.max(initial.boundingBox.size.x, initial.boundingBox.size.y, initial.boundingBox.size.z);
+  const tolerances = ADAPTIVE_WELD_RATIOS
+    .map((ratio) => Math.min(modelSize * ratio, MAX_ADAPTIVE_WELD_MM))
+    .filter((epsilon, index, values) => epsilon > WELD_EPSILON_MM && values.indexOf(epsilon) === index)
+    .sort((a, b) => a - b);
+
+  for (const weldEpsilonMm of tolerances) {
+    const candidate = createGemGeometryFromTriangleSoup(triangleSoup, { weldEpsilonMm });
+    if (!hasFatalTopologyWarning(candidate)) {
+      return candidate;
+    }
+  }
+
+  return initial;
+}
+
+export function repairGemGeometryTopology(geometry: GemGeometry): GemGeometry {
+  if (!hasFatalTopologyWarning(geometry)) {
+    return geometry;
+  }
+  const triangleSoup: TriangleSoup = geometry.triangles.map((triangle) => [
+    geometry.vertices[triangle.a],
+    geometry.vertices[triangle.b],
+    geometry.vertices[triangle.c],
+  ]);
+  return createGemGeometryFromTriangleSoupWithRepair(triangleSoup);
+}
+
+function hasFatalTopologyWarning(geometry: GemGeometry) {
+  return geometry.warnings.some(
+    (warning) => warning.code === 'open-edges' || warning.code === 'non-manifold-edges',
+  );
 }
 
 /** Builds domain geometry from a kernel-owned topology without spatial welding. */

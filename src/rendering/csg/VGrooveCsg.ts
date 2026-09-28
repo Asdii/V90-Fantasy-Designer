@@ -2,7 +2,11 @@ import Module, { type Manifold as ManifoldSolid, type ManifoldToplevel } from 'm
 import type { FacetFrame } from '../../geometry/FacetFrame';
 import type { GemGeometry, Vec3 } from '../../geometry/GemGeometry';
 import { validateGemGeometry } from '../../geometry/GeometryValidation';
-import { createGemGeometryFromIndexedMesh, type IndexedTriangle } from '../../geometry/meshBuilder';
+import {
+  createGemGeometryFromIndexedMesh,
+  repairGemGeometryTopology,
+  type IndexedTriangle,
+} from '../../geometry/meshBuilder';
 import { generateVGrooveCutterGeometry, type VGrooveSettings } from '../../grooves';
 import type { GroovePreviewGeometry } from '../../grooves/GroovePreviewGeometry';
 import type { WorldCutPath } from '../../patterns/placement/PatternPlacement';
@@ -31,7 +35,8 @@ export async function subtractVGroovesFromGemGeometry(
   settings: VGrooveSettings,
   onStage?: (stage: CreateCutsStage) => void,
 ): Promise<CreateCutsResult> {
-  validateGemGeometry(geometry);
+  const preparedGeometry = repairGemGeometryTopology(geometry);
+  validateGemGeometry(preparedGeometry);
   const validCutPaths = cutPaths.filter((path) => path.points.length >= 2);
   if (validCutPaths.length === 0) {
     return {
@@ -49,7 +54,7 @@ export async function subtractVGroovesFromGemGeometry(
   const cutters: ManifoldSolid[] = [];
 
   try {
-    gem = createManifoldFromGemGeometry(wasm, geometry);
+    gem = createManifoldFromGemGeometry(wasm, preparedGeometry);
     onStage?.('csg-started');
 
     for (const cutPath of validCutPaths) {

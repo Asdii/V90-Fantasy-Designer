@@ -1,9 +1,13 @@
 import type { Vec3 } from './GemGeometry';
-import { createGemGeometryFromTriangleSoup, type MeshBuildOptions, type TriangleSoup } from './meshBuilder';
+import {
+  createGemGeometryFromTriangleSoupWithRepair,
+  type MeshBuildOptions,
+  type TriangleSoup,
+} from './meshBuilder';
 
 export function parseStl(buffer: ArrayBuffer, options?: MeshBuildOptions) {
   const soup = isBinaryStl(buffer) ? parseBinaryStl(buffer) : parseAsciiStl(buffer);
-  return createGemGeometryFromTriangleSoup(soup, options);
+  return createGemGeometryFromTriangleSoupWithRepair(soup, options);
 }
 
 function isBinaryStl(buffer: ArrayBuffer) {

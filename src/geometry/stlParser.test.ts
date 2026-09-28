@@ -37,4 +37,34 @@ endsolid test`;
     expect(geometry.triangles).toHaveLength(1);
     expect(geometry.boundingBox.size).toEqual({ x: 1, y: 1, z: 0 });
   });
+
+  it('adaptively welds small exporter seams in an otherwise closed STL', () => {
+    const a = '1 1 1';
+    const shiftedA = '1.0008 1 1';
+    const b = '-1 -1 1';
+    const c = '-1 1 -1';
+    const d = '1 -1 -1';
+    const ascii = `solid repaired
+${facet(shiftedA, c, b)}
+${facet(a, b, d)}
+${facet(a, d, c)}
+${facet(b, c, d)}
+endsolid repaired`;
+
+    const geometry = parseStl(new TextEncoder().encode(ascii).buffer);
+
+    expect(geometry.vertices).toHaveLength(4);
+    expect(geometry.triangles).toHaveLength(4);
+    expect(geometry.warnings.some((warning) => warning.code === 'open-edges')).toBe(false);
+  });
 });
+
+function facet(a: string, b: string, c: string) {
+  return `facet normal 0 0 0
+  outer loop
+    vertex ${a}
+    vertex ${b}
+    vertex ${c}
+  endloop
+endfacet`;
+}

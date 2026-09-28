@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import type { FacetFrame } from '../../geometry/FacetFrame';
 import { createFacetLocalGeometry } from '../../geometry/FacetLocalGeometry';
 import { createPlaceholderGemGeometry } from '../../geometry/createPlaceholderGemGeometry';
-import { createGemGeometryFromTriangleSoup } from '../../geometry/meshBuilder';
+import { createGemGeometryFromIndexedMesh, createGemGeometryFromTriangleSoup } from '../../geometry/meshBuilder';
 import { createLinePrimitive, type DesignPattern } from '../../patterns/model/PatternModel';
 import { patternPlacementToWorldCutPaths } from '../../patterns/placement/PatternPlacement';
 import { subtractVGroovesFromGemGeometry } from './VGrooveCsg';
@@ -45,6 +45,28 @@ describe('VGrooveCsg', () => {
       { includedAngleDeg: 90, depthMm: 0.06 },
     );
     expect(result.cutPathCount).toBe(5);
+    expect(result.geometry.warnings.some((warning) => warning.code === 'open-edges' || warning.code === 'non-manifold-edges')).toBe(false);
+  });
+
+  it('repairs a cached mesh with a small export seam before subtraction', async () => {
+    const closedGem = createBoxGem();
+    const seamVertex = closedGem.vertices[closedGem.triangles[0].a];
+    const seamIndex = closedGem.vertices.length;
+    const gemWithExportSeam = createGemGeometryFromIndexedMesh(
+      [...closedGem.vertices, { ...seamVertex, x: seamVertex.x + 0.0008 }],
+      closedGem.triangles.map((triangle, index) => index === 0
+        ? { a: seamIndex, b: triangle.b, c: triangle.c }
+        : triangle),
+    );
+    expect(gemWithExportSeam.warnings.some((warning) => warning.code === 'open-edges')).toBe(true);
+
+    const result = await subtractVGroovesFromGemGeometry(
+      gemWithExportSeam,
+      [{ points: [{ x: -0.6, y: 0, z: 0.5 }, { x: 0.6, y: 0, z: 0.5 }] }],
+      topFrame,
+      { includedAngleDeg: 90, depthMm: 0.05 },
+    );
+
     expect(result.geometry.warnings.some((warning) => warning.code === 'open-edges' || warning.code === 'non-manifold-edges')).toBe(false);
   });
 
