@@ -66,6 +66,43 @@ describe('FacetFrame', () => {
     expectVec(first.normal, second.normal);
   });
 
+  it('maps pattern +Y to model +Y projected onto an inclined facet', () => {
+    const normal = normalize(v(0, 1, 1));
+    const expectedV = normalize(v(0, 1, -1));
+    const expectedU = v(1, 0, 0);
+    const angle = (17 * Math.PI) / 180;
+    const edgeA = normalize({
+      x: expectedU.x * Math.cos(angle) + expectedV.x * Math.sin(angle),
+      y: expectedU.y * Math.cos(angle) + expectedV.y * Math.sin(angle),
+      z: expectedU.z * Math.cos(angle) + expectedV.z * Math.sin(angle),
+    });
+    const edgeB = normalize(cross(normal, edgeA));
+    const corners = [
+      addScaled(edgeA, edgeB, -3, -1),
+      addScaled(edgeA, edgeB, 3, -1),
+      addScaled(edgeA, edgeB, 3, 1),
+      addScaled(edgeA, edgeB, -3, 1),
+    ];
+    const geometry = createGemGeometryFromTriangleSoup([
+      [corners[0], corners[1], corners[2]],
+      [corners[0], corners[2], corners[3]],
+    ]);
+    const frame = createFacetFrame(geometry, geometry.facets[0]);
+
+    expectVec(frame.vAxis, expectedV);
+    expectVec(frame.uAxis, expectedU);
+  });
+
+  it('uses model +Z as the stable pattern +Y reference on a horizontal facet', () => {
+    const geometry = createGemGeometryFromTriangleSoup([
+      [v(-1, 0, -1), v(-1, 0, 1), v(1, 0, 1)],
+      [v(-1, 0, -1), v(1, 0, 1), v(1, 0, -1)],
+    ]);
+    const frame = createFacetFrame(geometry, geometry.facets[0]);
+
+    expectVec(frame.vAxis, v(0, 0, 1));
+  });
+
   it('handles horizontal upward and downward normals', () => {
     const upward = createGemGeometryFromTriangleSoup([[v(0, 0, 0), v(1, 0, 0), v(0, 1, 0)]]);
     const downward = createGemGeometryFromTriangleSoup([[v(0, 0, 0), v(0, 1, 0), v(1, 0, 0)]]);
@@ -132,4 +169,12 @@ function hexagonSoup(): TriangleSoup {
 
 function v(x: number, y: number, z: number): Vec3 {
   return { x, y, z };
+}
+
+function addScaled(a: Vec3, b: Vec3, aScale: number, bScale: number): Vec3 {
+  return {
+    x: a.x * aScale + b.x * bScale,
+    y: a.y * aScale + b.y * bScale,
+    z: a.z * aScale + b.z * bScale,
+  };
 }
