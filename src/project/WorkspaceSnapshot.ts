@@ -4,7 +4,7 @@ import type { GemMaterial } from '../materials/GemMaterial';
 import type { PatternReferenceImage } from '../patterns/editor/PatternReferenceImage';
 import type { FacetMeasurementSession } from '../geometry/FacetMeasurementSession';
 import type { DesignPattern } from '../patterns/model/PatternModel';
-import type { PatternPlacement } from '../patterns/placement/PatternPlacement';
+import type { CutPathExtentMode, PatternPlacement } from '../patterns/placement/PatternPlacement';
 import type { BackgroundMode } from '../rendering/background';
 import type { CameraSnapshot } from '../rendering/cameraViews';
 import type { GemEnvironmentPreset } from '../rendering/EnvironmentPreset';
@@ -43,6 +43,7 @@ export interface WorkspaceSnapshot {
     readonly cutterPreset: VGrooveCutterPreset;
     readonly displayMode: VGrooveDisplayMode;
     readonly preview: boolean;
+    readonly extentMode: CutPathExtentMode;
   };
 }
 
@@ -81,6 +82,10 @@ export function parseWorkspaceSnapshot(text: string): WorkspaceSnapshot {
     view: {
       ...snapshot.view,
       camera: snapshot.view.camera ?? { position: [6, 4.5, 6], target: [0, 0, 0] },
+    },
+    cut: {
+      ...snapshot.cut,
+      extentMode: snapshot.cut.extentMode === 'patternOnly' ? 'patternOnly' : 'acrossFacet',
     },
   };
 }

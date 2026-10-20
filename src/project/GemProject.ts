@@ -1,7 +1,7 @@
 import type { GemGeometry } from '../geometry/GemGeometry';
 import type { FacetPatternMap } from '../patterns/Pattern';
 import type { DesignPattern } from '../patterns/model/PatternModel';
-import type { PatternPlacement, WorldCutPath } from '../patterns/placement/PatternPlacement';
+import type { CutPathExtentMode, PatternPlacement, WorldCutPath } from '../patterns/placement/PatternPlacement';
 import type { CutHelperSnapshot, VGrooveSettings } from '../grooves';
 
 export interface CutOperation {
@@ -10,6 +10,7 @@ export interface CutOperation {
   readonly patternSnapshot: DesignPattern;
   readonly placement: PatternPlacement;
   readonly grooveSettings: VGrooveSettings;
+  readonly extentMode?: CutPathExtentMode;
   readonly facetNormal: GemGeometry['vertices'][number];
   readonly worldCutPaths: readonly WorldCutPath[];
   readonly cutPathCount: number;

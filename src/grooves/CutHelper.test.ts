@@ -47,6 +47,30 @@ describe('CutHelper', () => {
     expect(instructions.every((instruction) => instruction.visibleSegments.length === 1)).toBe(true);
   });
 
+  it('uses the finite drawn segment for pattern-only instructions', () => {
+    const pattern = designPattern({
+      id: 'short-line',
+      type: 'polyline',
+      role: 'pattern',
+      points: [{ x: -2, y: 0 }, { x: 2, y: 0 }],
+      closed: false,
+    });
+
+    const [instruction] = createCutInstructions(
+      pattern,
+      createDefaultPatternPlacement(0),
+      localGeometry(20),
+      { includedAngleDeg: 90, depthMm: 0.05 },
+      'patternOnly',
+    );
+
+    expect(instruction.segment.start.u).toBe(-2);
+    expect(instruction.segment.end.u).toBe(2);
+    expect(instruction.visibleSegments).toHaveLength(1);
+    expect(instruction.visibleSegments[0].start).toEqual(instruction.segment.start);
+    expect(instruction.visibleSegments[0].end).toEqual(instruction.segment.end);
+  });
+
   it('rebases a later facet instruction onto the first facet center and axes', () => {
     const sourceBase = localGeometry(10);
     const source = {

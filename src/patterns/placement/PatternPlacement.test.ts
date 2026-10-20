@@ -89,6 +89,24 @@ describe('PatternPlacement', () => {
     expect(worldPaths[0].points[1]).toMatchObject({ y: 20, z: 30 });
   });
 
+  it('keeps finite pattern endpoints when cut extent is pattern only', () => {
+    const pattern = patternWithLine({ x: -0.25, y: 0 }, { x: 0.25, y: 0 });
+    const worldPaths = patternPlacementToWorldCutPaths(pattern, placement({}), localGeometry, 0, 'patternOnly');
+
+    expect(worldPaths).toHaveLength(1);
+    expect(worldPaths[0].points[0]).toMatchObject({ x: 9.75, y: 20, z: 30 });
+    expect(worldPaths[0].points[1]).toMatchObject({ x: 10.25, y: 20, z: 30 });
+  });
+
+  it('clips a finite pattern-only cut to the selected facet boundary', () => {
+    const pattern = patternWithLine({ x: -2, y: 0 }, { x: 0.25, y: 0 });
+    const worldPaths = patternPlacementToWorldCutPaths(pattern, placement({}), localGeometry, 0, 'patternOnly');
+
+    expect(worldPaths).toHaveLength(1);
+    expect(worldPaths[0].points[0].x).toBeCloseTo(9);
+    expect(worldPaths[0].points[1].x).toBeCloseTo(10.25);
+  });
+
   it('turns every polygon edge into an independent full-facet cut line', () => {
     const square: DesignPattern = {
       id: 'square',

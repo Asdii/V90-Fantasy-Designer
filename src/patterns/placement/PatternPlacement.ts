@@ -26,6 +26,8 @@ export interface WorldCutPath {
   readonly points: readonly Vec3[];
 }
 
+export type CutPathExtentMode = 'acrossFacet' | 'patternOnly';
+
 export function createDefaultPatternPlacement(facetId: number): PatternPlacement {
   return {
     facetId,
@@ -124,8 +126,9 @@ export function patternPlacementToWorldCutPaths(
   placement: PatternPlacement,
   localGeometry: FacetLocalGeometry,
   visualOffsetNormal = 0,
+  extentMode: CutPathExtentMode = 'acrossFacet',
 ): WorldCutPath[] {
-  const effectiveSegments = patternPlacementToFacetCutSegments(pattern, placement, localGeometry.boundary);
+  const effectiveSegments = patternPlacementToFacetCutSegments(pattern, placement, localGeometry.boundary, extentMode);
   return effectiveSegments.map((segment) => ({
     points: [
       localToWorld(localGeometry.frame, segment.start.u, segment.start.v, visualOffsetNormal),
@@ -138,6 +141,7 @@ export function patternPlacementToFacetCutSegments(
   pattern: DesignPattern,
   placement: PatternPlacement,
   facetPolygon: readonly { readonly u: number; readonly v: number }[],
+  extentMode: CutPathExtentMode = 'acrossFacet',
 ): LineSegment2D[] {
   const segments: LineSegment2D[] = [];
 
@@ -147,29 +151,31 @@ export function patternPlacementToFacetCutSegments(
     }
 
     if (primitive.type === 'line') {
-      addInfiniteLineSegment(segments, primitive.id, primitive.start, primitive.end, placement, facetPolygon);
+      addStraightCutSegment(segments, primitive.id, primitive.start, primitive.end, placement, facetPolygon, extentMode);
       continue;
     }
 
     if (primitive.type === 'polyline') {
       for (let index = 0; index + 1 < primitive.points.length; index += 1) {
-        addInfiniteLineSegment(
+        addStraightCutSegment(
           segments,
           `${primitive.id}-${index}`,
           primitive.points[index],
           primitive.points[index + 1],
           placement,
           facetPolygon,
+          extentMode,
         );
       }
       if (primitive.closed && primitive.points.length > 2) {
-        addInfiniteLineSegment(
+        addStraightCutSegment(
           segments,
           `${primitive.id}-closed`,
           primitive.points[primitive.points.length - 1],
           primitive.points[0],
           placement,
           facetPolygon,
+          extentMode,
         );
       }
       continue;
@@ -184,16 +190,21 @@ export function patternPlacementToFacetCutSegments(
   return segments;
 }
 
-function addInfiniteLineSegment(
+function addStraightCutSegment(
   target: LineSegment2D[],
   id: string,
   start: Vec2,
   end: Vec2,
   placement: PatternPlacement,
   facetPolygon: readonly { readonly u: number; readonly v: number }[],
+  extentMode: CutPathExtentMode,
 ) {
   const placedStart = applyPatternPlacement(start, placement);
   const placedEnd = applyPatternPlacement(end, placement);
+  if (extentMode === 'patternOnly') {
+    target.push(...clipSegmentToFacetPolygon({ id, start: placedStart, end: placedEnd }, facetPolygon).inside);
+    return;
+  }
   const extended = extendLineAcrossFacet({ id, start: placedStart, end: placedEnd }, facetPolygon);
   if (extended && clipSegmentToFacetPolygon(extended, facetPolygon).inside.length > 0) {
     target.push(extended);

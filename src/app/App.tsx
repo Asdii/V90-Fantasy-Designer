@@ -42,6 +42,7 @@ import {
   centerPatternPlacement,
   fitPatternPlacementToFacetBounds,
   patternPlacementToWorldCutPaths,
+  type CutPathExtentMode,
   type PatternPlacement,
 } from '../patterns/placement/PatternPlacement';
 import type { BackgroundMode } from '../rendering/background';
@@ -130,6 +131,7 @@ export function App() {
   const [vGrooveSettings, setVGrooveSettings] = useState<VGrooveSettings>(defaultVGrooveSettings);
   const [vGrooveCutterPreset, setVGrooveCutterPreset] = useState<VGrooveCutterPreset>('90');
   const [vGrooveDisplayMode, setVGrooveDisplayMode] = useState<VGrooveDisplayMode>('centerLines');
+  const [cutPathExtentMode, setCutPathExtentMode] = useState<CutPathExtentMode>('acrossFacet');
   const [showVGroovePreview, setShowVGroovePreview] = useState(true);
   const [project, setProject] = useState<GemProject>({
     version: 1,
@@ -196,12 +198,13 @@ export function App() {
       cutterPreset: vGrooveCutterPreset,
       displayMode: vGrooveDisplayMode,
       preview: showVGroovePreview,
+      extentMode: cutPathExtentMode,
     },
   }), [
     appSettings, background, cleanRender, designPattern, designerSize, environmentPreset,
     facetDebugColors, facetMeasurementSession, gemMaterial, gemViewMode, patternPlacement, patternReferenceImage,
     project, selectedFacetId, showFacetBoundaries, showFacetNormals, showLocalWorkplane,
-    showVGroovePreview, showWireframe, vGrooveCutterPreset, vGrooveDisplayMode, vGrooveSettings,
+    cutPathExtentMode, showVGroovePreview, showWireframe, vGrooveCutterPreset, vGrooveDisplayMode, vGrooveSettings,
   ]);
 
   useEffect(() => {
@@ -313,7 +316,7 @@ export function App() {
         return;
       }
       const localGeometry = createFacetLocalGeometry(geometry, facet);
-      const paths = patternPlacementToWorldCutPaths(designPattern, patternPlacement, localGeometry);
+      const paths = patternPlacementToWorldCutPaths(designPattern, patternPlacement, localGeometry, 0, cutPathExtentMode);
       void subtractVGroovesFromGemGeometry(geometry, paths, localGeometry.frame, vGrooveSettings)
         .then((result) => {
           if (cutPreviewRequestRef.current === request) {
@@ -329,7 +332,7 @@ export function App() {
     }, 120);
 
     return () => window.clearTimeout(timer);
-  }, [cutOperationState.status, designPattern, patternPlacement, project.geometry, selectedFacetId, showVGroovePreview, vGrooveSettings]);
+  }, [cutOperationState.status, cutPathExtentMode, designPattern, patternPlacement, project.geometry, selectedFacetId, showVGroovePreview, vGrooveSettings]);
 
   const loadStl = async (file: File) => {
     try {
@@ -382,6 +385,7 @@ export function App() {
     setFacetMeasurementSession(createDefaultFacetMeasurementSession());
     setPatternReferenceImage(undefined);
     setCutPreviewGeometry(undefined);
+    setCutPathExtentMode('acrossFacet');
     setShowVGroovePreview(true);
     setFitModelRequest((value) => value + 1);
   };
@@ -495,8 +499,8 @@ export function App() {
         throw new Error('Gem geometry changed before the cut operation started.');
       }
       const localGeometry = createFacetLocalGeometry(project.geometry, facet);
-      const worldCutPaths = patternPlacementToWorldCutPaths(designPattern, patternPlacement, localGeometry);
-      const cutInstructions = createCutInstructions(designPattern, patternPlacement, localGeometry, vGrooveSettings);
+      const worldCutPaths = patternPlacementToWorldCutPaths(designPattern, patternPlacement, localGeometry, 0, cutPathExtentMode);
+      const cutInstructions = createCutInstructions(designPattern, patternPlacement, localGeometry, vGrooveSettings, cutPathExtentMode);
       console.debug('[CreateCuts] pattern paths ready', { count: worldCutPaths.length });
       const result = await subtractVGroovesFromGemGeometry(
         baseGeometry,
@@ -514,6 +518,7 @@ export function App() {
         patternSnapshot: designPattern,
         placement: patternPlacement,
         grooveSettings: vGrooveSettings,
+        extentMode: cutPathExtentMode,
         facetNormal: localGeometry.frame.normal,
         worldCutPaths,
         cutPathCount: result.cutPathCount,
@@ -634,6 +639,7 @@ export function App() {
     setVGrooveSettings(snapshot.cut.settings);
     setVGrooveCutterPreset(snapshot.cut.cutterPreset);
     setVGrooveDisplayMode(snapshot.cut.displayMode);
+    setCutPathExtentMode(snapshot.cut.extentMode);
     setShowVGroovePreview(snapshot.cut.preview);
     setShowCutHelper(false);
     setShowFacetMeasurement(false);
@@ -780,6 +786,7 @@ export function App() {
               patternPlacement={patternPlacement}
               vGrooveSettings={vGrooveSettings}
               vGrooveDisplayMode={vGrooveDisplayMode}
+              cutPathExtentMode={cutPathExtentMode}
               showVGroovePreview={showVGroovePreview && cutOperationState.status !== 'running'}
               facetDebugColors={facetDebugColors}
               hoveredFacetId={hoveredFacetId}
@@ -819,6 +826,7 @@ export function App() {
                 vGrooveSettings={vGrooveSettings}
                 vGrooveCutterPreset={vGrooveCutterPreset}
                 vGrooveDisplayMode={vGrooveDisplayMode}
+                cutPathExtentMode={cutPathExtentMode}
                 showVGroovePreview={showVGroovePreview}
                 cutOperationState={cutOperationState}
                 cutPlaneReferenceFacetId={project.cutOperations[0]?.facetId}
@@ -833,6 +841,7 @@ export function App() {
                 onVGrooveSettingsChange={setVGrooveSettings}
                 onVGrooveCutterPresetChange={setVGrooveCutterPreset}
                 onVGrooveDisplayModeChange={setVGrooveDisplayMode}
+                onCutPathExtentModeChange={setCutPathExtentMode}
                 onShowVGroovePreviewChange={setShowVGroovePreview}
                 onCenterPattern={centerPatternOnFacet}
                 onCreateCuts={createCuts}

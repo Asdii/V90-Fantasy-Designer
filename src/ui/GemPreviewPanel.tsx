@@ -2,7 +2,7 @@ import type { GemProject } from '../project/GemProject';
 import type { GemMaterial } from '../materials/GemMaterial';
 import { gemMaterialPresets } from '../materials/GemMaterial';
 import type { GemEnvironmentPreset } from '../rendering/EnvironmentPreset';
-import type { PatternPlacement } from '../patterns/placement/PatternPlacement';
+import type { CutPathExtentMode, PatternPlacement } from '../patterns/placement/PatternPlacement';
 import {
   calculateWheelTierGuide,
   calculateVGrooveDimensions,
@@ -24,6 +24,7 @@ interface GemPreviewPanelProps {
   readonly vGrooveSettings: VGrooveSettings;
   readonly vGrooveCutterPreset: VGrooveCutterPreset;
   readonly vGrooveDisplayMode: VGrooveDisplayMode;
+  readonly cutPathExtentMode: CutPathExtentMode;
   readonly showVGroovePreview: boolean;
   readonly cutOperationState: { readonly status: 'idle' | 'running' | 'success' | 'error'; readonly message?: string };
   readonly cutPlaneReferenceFacetId?: number;
@@ -38,6 +39,7 @@ interface GemPreviewPanelProps {
   readonly onVGrooveSettingsChange: (settings: VGrooveSettings) => void;
   readonly onVGrooveCutterPresetChange: (preset: VGrooveCutterPreset) => void;
   readonly onVGrooveDisplayModeChange: (mode: VGrooveDisplayMode) => void;
+  readonly onCutPathExtentModeChange: (mode: CutPathExtentMode) => void;
   readonly onShowVGroovePreviewChange: (enabled: boolean) => void;
   readonly onCenterPattern: () => void;
   readonly onCreateCuts: () => void;
@@ -60,6 +62,7 @@ export function GemPreviewPanel({
   vGrooveSettings,
   vGrooveCutterPreset,
   vGrooveDisplayMode,
+  cutPathExtentMode,
   showVGroovePreview,
   cutOperationState,
   cutPlaneReferenceFacetId,
@@ -74,6 +77,7 @@ export function GemPreviewPanel({
   onVGrooveSettingsChange,
   onVGrooveCutterPresetChange,
   onVGrooveDisplayModeChange,
+  onCutPathExtentModeChange,
   onShowVGroovePreviewChange,
   onCenterPattern,
   onCreateCuts,
@@ -252,6 +256,17 @@ export function GemPreviewPanel({
         <dt>Width</dt>
         <dd>{grooveDimensions.widthMm.toFixed(3)} mm</dd>
       </dl>
+      <label className="numberRow">
+        Cut extent
+        <select
+          className="toolbarSelect"
+          value={cutPathExtentMode}
+          onChange={(event) => onCutPathExtentModeChange(event.target.value as CutPathExtentMode)}
+        >
+          <option value="acrossFacet">Across facet</option>
+          <option value="patternOnly">Pattern only</option>
+        </select>
+      </label>
       {experimentalWheelTierGuide ? (
         <section className="experimentalTierGuide" aria-label="Experimental physical wheel and tier guide">
           <header>

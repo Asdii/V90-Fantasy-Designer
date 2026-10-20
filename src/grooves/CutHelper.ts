@@ -5,6 +5,7 @@ import { clipSegmentToFacetPolygon } from '../patterns/PatternClipping';
 import type { DesignPattern } from '../patterns/model/PatternModel';
 import {
   patternPlacementToFacetCutSegments,
+  type CutPathExtentMode,
   type PatternPlacement,
 } from '../patterns/placement/PatternPlacement';
 import type { VGrooveSettings } from './VGrooveSettings';
@@ -42,8 +43,9 @@ export function createCutInstructions(
   placement: PatternPlacement,
   localGeometry: FacetLocalGeometry,
   settings: VGrooveSettings,
+  extentMode: CutPathExtentMode = 'acrossFacet',
 ): CutInstruction[] {
-  return patternPlacementToFacetCutSegments(pattern, placement, localGeometry.boundary)
+  return patternPlacementToFacetCutSegments(pattern, placement, localGeometry.boundary, extentMode)
     .filter((segment) => segmentLength(segment) > DIRECTION_EPSILON)
     .map((segment, index) => ({
       id: segment.id,

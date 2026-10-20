@@ -8,7 +8,11 @@ import type { GemProject } from '../project/GemProject';
 import type { GridSnapStep, LineSegment2D, Pattern, PatternTool, Vec2 } from '../patterns/Pattern';
 import type { GemMaterial } from '../materials/GemMaterial';
 import type { DesignPattern } from '../patterns/model/PatternModel';
-import { patternPlacementToWorldCutPaths, type PatternPlacement } from '../patterns/placement/PatternPlacement';
+import {
+  patternPlacementToWorldCutPaths,
+  type CutPathExtentMode,
+  type PatternPlacement,
+} from '../patterns/placement/PatternPlacement';
 import { createEmptyPattern, createSegment } from '../patterns/Pattern';
 import {
   circularArraySegments,
@@ -62,6 +66,7 @@ interface ViewportProps {
   readonly patternPlacement?: PatternPlacement;
   readonly vGrooveSettings?: VGrooveSettings;
   readonly vGrooveDisplayMode: VGrooveDisplayMode;
+  readonly cutPathExtentMode: CutPathExtentMode;
   readonly showVGroovePreview: boolean;
   readonly showFacetBoundaries: boolean;
   readonly showFacetNormals: boolean;
@@ -121,6 +126,7 @@ export function Viewport({
   patternPlacement,
   vGrooveSettings,
   vGrooveDisplayMode,
+  cutPathExtentMode,
   showVGroovePreview,
   showFacetBoundaries,
   showFacetNormals,
@@ -371,7 +377,7 @@ export function Viewport({
       return;
     }
 
-    const worldCutPaths = patternPlacementToWorldCutPaths(designPattern, patternPlacement, localGeometry);
+    const worldCutPaths = patternPlacementToWorldCutPaths(designPattern, patternPlacement, localGeometry, 0, cutPathExtentMode);
     const grooveGeometry = generateVGroovePreviewGeometry(worldCutPaths, localGeometry.frame, vGrooveSettings);
     const showCenterLines = vGrooveDisplayMode === 'centerLines' || vGrooveDisplayMode === 'both';
     renderer.render(
@@ -382,6 +388,7 @@ export function Viewport({
     );
   }, [
     cleanRender,
+    cutPathExtentMode,
     designPattern,
     patternPlacement,
     project.geometry,
