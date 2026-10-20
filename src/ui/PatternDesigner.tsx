@@ -8,6 +8,11 @@ import {
 } from '../patterns/model/PatternModel';
 import { calculateDesignPatternBounds, calculatePrimitiveBounds } from '../patterns/geometry/bounds';
 import { normalizePattern, patternToCutPaths } from '../patterns/geometry/pathConversion';
+import {
+  inferPatternSymmetryConstraint,
+  patternMatchesSymmetryConstraint,
+  type PatternSymmetryConstraint,
+} from '../patterns/geometry/PatternSymmetryLock';
 import { mirrorPrimitive, radialDuplicatePrimitives, transformPrimitive } from '../patterns/geometry/transforms';
 import { createRegularPolygonPrimitive } from '../patterns/editor/RegularPolygon';
 import { createCenteredRectanglePrimitive } from '../patterns/editor/Rectangle';
@@ -33,6 +38,7 @@ type PointerDrag =
 interface PatternDesignerProps {
   readonly pattern: DesignPattern;
   readonly onPatternChange: (pattern: DesignPattern) => void;
+  readonly experimentalSymmetryLock?: boolean;
   readonly referenceImage?: PatternReferenceImage;
   readonly onReferenceImageChange?: (image: PatternReferenceImage | undefined) => void;
   readonly keyboardActive?: boolean;
@@ -41,11 +47,20 @@ interface PatternDesignerProps {
 const tools: DesignerTool[] = ['select', 'line', 'rectangle', 'triangle', 'hexagon', 'pentagon'];
 const gridOptions = [1, 0.5, 0.1];
 
-export function PatternDesigner({ pattern, onPatternChange, referenceImage, onReferenceImageChange, keyboardActive = true }: PatternDesignerProps) {
+export function PatternDesigner({
+  pattern,
+  onPatternChange,
+  experimentalSymmetryLock = false,
+  referenceImage,
+  onReferenceImageChange,
+  keyboardActive = true,
+}: PatternDesignerProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const undoStackRef = useRef<DesignPattern[]>([]);
   const redoStackRef = useRef<DesignPattern[]>([]);
   const dragChangedRef = useRef(false);
+  const symmetryConstraintRef = useRef<PatternSymmetryConstraint | undefined>(undefined);
+  const symmetryPatternIdRef = useRef(pattern.id);
   const [tool, setTool] = useState<DesignerTool>('select');
   const [role, setRole] = useState<PrimitiveRole>('pattern');
   const [snapEnabled, setSnapEnabled] = useState(true);
@@ -69,6 +84,8 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
   const [transformScale, setTransformScale] = useState(1);
   const [showPatternData, setShowPatternData] = useState(false);
   const [moveReferenceImage, setMoveReferenceImage] = useState(false);
+  const [symmetryConstraint, setSymmetryConstraint] = useState<PatternSymmetryConstraint>();
+  const [symmetryLockMessage, setSymmetryLockMessage] = useState<string>();
 
   const selectedPrimitives = pattern.primitives.filter((primitive) => selectedIds.includes(primitive.id));
   const bounds = calculateDesignPatternBounds(pattern);
@@ -136,6 +153,34 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
 
     return () => resizeObserver.disconnect();
   }, []);
+
+  useEffect(() => {
+    const patternChanged = symmetryPatternIdRef.current !== pattern.id;
+    if (!experimentalSymmetryLock || patternChanged) {
+      symmetryPatternIdRef.current = pattern.id;
+      updateSymmetryConstraint(undefined);
+      setSymmetryLockMessage(undefined);
+    }
+    if (!experimentalSymmetryLock) {
+      return;
+    }
+
+    const detected = inferPatternSymmetryConstraint(pattern);
+    if (!detected) {
+      if (!hasLockablePatternGeometry(pattern)) {
+        updateSymmetryConstraint(undefined);
+        setSymmetryLockMessage('Draw an origin-centered symmetric shape to establish the lock.');
+      } else if (!symmetryConstraintRef.current) {
+        setSymmetryLockMessage('The current geometry has no detectable symmetry around (0,0).');
+      }
+      return;
+    }
+
+    if (!symmetryConstraintRef.current) {
+      updateSymmetryConstraint(detected);
+      setSymmetryLockMessage(undefined);
+    }
+  }, [experimentalSymmetryLock, pattern]);
 
   return (
     <main className="patternDesignerShell">
@@ -226,6 +271,20 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
               </label>
               <NumberInput label="Order" value={symmetryOrder} min={2} step={1} onChange={setSymmetryOrder} />
             </>
+          ) : null}
+          {experimentalSymmetryLock ? (
+            <section className="patternSymmetryLock" aria-live="polite">
+              <header>
+                <strong>Symmetry Lock</strong>
+                <span>Experimental</span>
+              </header>
+              <p>
+                {symmetryConstraint
+                  ? `Locked to ${symmetryConstraint.reflectionAxisDeg === undefined ? 'C' : 'D'}${symmetryConstraint.rotationOrder} around (0,0).`
+                  : 'Waiting for the first symmetric drawing.'}
+              </p>
+              {symmetryLockMessage ? <p className="errorText">{symmetryLockMessage}</p> : null}
+            </section>
           ) : null}
           {selectedPrimitives.length > 0 ? (
             <>
@@ -394,14 +453,21 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
       const dx = point.x - drag.startWorld.x;
       const dy = point.y - drag.startWorld.y;
       dragChangedRef.current = Math.abs(dx) > 1e-12 || Math.abs(dy) > 1e-12;
-      onPatternChange({
+      const next = {
         ...drag.original,
         primitives: drag.original.primitives.map((primitive) =>
           selectedIds.includes(primitive.id)
             ? transformPrimitive(primitive, { translateX: dx, translateY: dy, rotationDeg: 0, scale: 1, center: { x: 0, y: 0 } })
             : primitive,
         ),
-      });
+      };
+      if (!experimentalSymmetryLock || !symmetryConstraintRef.current || patternMatchesSymmetryConstraint(next, symmetryConstraintRef.current)) {
+        setSymmetryLockMessage(undefined);
+        onPatternChange(next);
+      } else {
+        dragChangedRef.current = false;
+        setSymmetryLockMessage('Move rejected because it breaks the initial pattern symmetry.');
+      }
     }
   }
 
@@ -539,8 +605,32 @@ export function PatternDesigner({ pattern, onPatternChange, referenceImage, onRe
   }
 
   function commitPatternChange(next: DesignPattern) {
+    if (experimentalSymmetryLock) {
+      if (!hasLockablePatternGeometry(next)) {
+        updateSymmetryConstraint(undefined);
+        setSymmetryLockMessage('Draw an origin-centered symmetric shape to establish the lock.');
+      } else if (!symmetryConstraintRef.current) {
+        const detected = inferPatternSymmetryConstraint(next);
+        if (!detected) {
+          setSymmetryLockMessage('Change rejected. The first drawing must be symmetric around pattern origin (0,0).');
+          return;
+        }
+        updateSymmetryConstraint(detected);
+        setSymmetryLockMessage(undefined);
+      } else if (!patternMatchesSymmetryConstraint(next, symmetryConstraintRef.current)) {
+        setSymmetryLockMessage('Change rejected because it breaks the symmetry established by the first drawing.');
+        return;
+      } else {
+        setSymmetryLockMessage(undefined);
+      }
+    }
     recordUndoSnapshot(pattern);
     onPatternChange(next);
+  }
+
+  function updateSymmetryConstraint(next: PatternSymmetryConstraint | undefined) {
+    symmetryConstraintRef.current = next;
+    setSymmetryConstraint(next);
   }
 
   function recordUndoSnapshot(snapshot: DesignPattern) {
@@ -819,6 +909,11 @@ function isShapeTool(tool: DesignerTool): tool is Exclude<DesignerTool, 'select'
 
 function isRegularShapeTool(tool: DesignerTool): tool is 'triangle' | 'pentagon' | 'hexagon' {
   return tool === 'triangle' || tool === 'pentagon' || tool === 'hexagon';
+}
+
+function hasLockablePatternGeometry(pattern: DesignPattern) {
+  return pattern.primitives.some((primitive) =>
+    primitive.role === 'pattern' && (primitive.type === 'line' || primitive.type === 'polyline'));
 }
 
 function createShapePrimitive(

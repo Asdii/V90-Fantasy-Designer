@@ -728,6 +728,7 @@ export function App() {
           <PatternDesigner
             pattern={designPattern}
             onPatternChange={updateDesignPattern}
+            experimentalSymmetryLock={appSettings.experimentalPatternSymmetryLock}
             referenceImage={patternReferenceImage}
             onReferenceImageChange={setPatternReferenceImage}
             keyboardActive={activeWorkspace === 'pattern'}

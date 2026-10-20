@@ -16,6 +16,7 @@ describe('AppSettings', () => {
       showStatusBar: true,
       reducedMotion: true,
       experimentalWheelTierGuide: false,
+      experimentalPatternSymmetryLock: false,
       wheelDiameterMm: 20,
       tierAngleDeg: 45,
     });
@@ -25,12 +26,14 @@ describe('AppSettings', () => {
     const settings = loadAppSettings({
       getItem: () => JSON.stringify({
         experimentalWheelTierGuide: true,
+        experimentalPatternSymmetryLock: true,
         wheelDiameterMm: 24,
         tierAngleDeg: 45,
       }),
     });
 
     expect(settings.experimentalWheelTierGuide).toBe(true);
+    expect(settings.experimentalPatternSymmetryLock).toBe(true);
     expect(settings.wheelDiameterMm).toBe(24);
     expect(settings.tierAngleDeg).toBe(45);
   });

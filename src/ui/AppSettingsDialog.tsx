@@ -104,6 +104,17 @@ export function AppSettingsDialog({ settings, onChange, onClose }: AppSettingsDi
               <small>
                 Shows wheel runout and estimated tier dimensions in the Cut panel. It does not change committed cut geometry.
               </small>
+              <label className="settingsToggle">
+                <input
+                  type="checkbox"
+                  checked={settings.experimentalPatternSymmetryLock}
+                  onChange={(event) => onChange({ ...settings, experimentalPatternSymmetryLock: event.target.checked })}
+                />
+                Lock pattern to first symmetry
+              </label>
+              <small>
+                Detects the first pattern's rotational and mirror symmetry around (0,0), then rejects edits that break it.
+              </small>
             </div>
           </SettingRow>
         </div>

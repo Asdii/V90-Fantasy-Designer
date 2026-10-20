@@ -13,6 +13,7 @@ export interface AppSettings {
   readonly showStatusBar: boolean;
   readonly reducedMotion: boolean;
   readonly experimentalWheelTierGuide: boolean;
+  readonly experimentalPatternSymmetryLock: boolean;
   readonly wheelDiameterMm: number;
   readonly tierAngleDeg: number;
 }
@@ -28,6 +29,7 @@ export const defaultAppSettings: AppSettings = {
   showStatusBar: true,
   reducedMotion: false,
   experimentalWheelTierGuide: false,
+  experimentalPatternSymmetryLock: false,
   wheelDiameterMm: 20,
   tierAngleDeg: 45,
 };
@@ -58,6 +60,7 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     showStatusBar: settings.showStatusBar !== false,
     reducedMotion: settings.reducedMotion === true,
     experimentalWheelTierGuide: settings.experimentalWheelTierGuide === true,
+    experimentalPatternSymmetryLock: settings.experimentalPatternSymmetryLock === true,
     wheelDiameterMm: clampFinite(settings.wheelDiameterMm, 0.001, 1000, 20),
     tierAngleDeg: clampFinite(settings.tierAngleDeg, 0.001, 89.999, 45),
   };

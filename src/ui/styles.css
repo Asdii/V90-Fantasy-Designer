@@ -1082,6 +1082,53 @@ input:focus-visible {
   color: #536575;
 }
 
+.patternSymmetryLock {
+  display: grid;
+  gap: 5px;
+  margin: 10px 0;
+  padding: 8px;
+  border: 1px solid #58708a;
+  border-radius: 6px;
+  background: rgba(33, 56, 77, 0.5);
+}
+
+.patternSymmetryLock header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.patternSymmetryLock header span {
+  padding: 2px 5px;
+  border: 1px solid #6689a8;
+  border-radius: 4px;
+  color: #bcd9f2;
+  font-size: 9px;
+  text-transform: uppercase;
+}
+
+.patternContextPanel .patternSymmetryLock p {
+  margin: 0;
+  font-size: 10px;
+  line-height: 1.4;
+}
+
+.theme-light .patternSymmetryLock {
+  border-color: #6f8eaa;
+  background: #e7f0f7;
+}
+
+.theme-light .patternSymmetryLock header {
+  color: #172c3d;
+}
+
+.theme-light .patternSymmetryLock header span {
+  border-color: #6f8eaa;
+  color: #315c7b;
+}
+
 .toolGrid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
