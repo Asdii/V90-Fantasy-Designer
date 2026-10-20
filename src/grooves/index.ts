@@ -20,3 +20,9 @@ export {
   type VGrooveDisplayMode,
   type VGrooveSettings,
 } from './VGrooveSettings';
+export {
+  calculateFacetAngleFromHorizontal,
+  calculateWheelTierGuide,
+  type WheelTierGuideInput,
+  type WheelTierGuideResult,
+} from './WheelTierGuide';

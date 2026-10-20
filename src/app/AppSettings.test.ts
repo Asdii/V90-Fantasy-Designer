@@ -15,7 +15,24 @@ describe('AppSettings', () => {
       gridContrast: 'soft',
       showStatusBar: true,
       reducedMotion: true,
+      experimentalWheelTierGuide: false,
+      wheelDiameterMm: 20,
+      tierAngleDeg: 45,
     });
+  });
+
+  it('normalizes persisted experimental wheel guide settings', () => {
+    const settings = loadAppSettings({
+      getItem: () => JSON.stringify({
+        experimentalWheelTierGuide: true,
+        wheelDiameterMm: 24,
+        tierAngleDeg: 45,
+      }),
+    });
+
+    expect(settings.experimentalWheelTierGuide).toBe(true);
+    expect(settings.wheelDiameterMm).toBe(24);
+    expect(settings.tierAngleDeg).toBe(45);
   });
 
   it('falls back safely when stored settings are invalid', () => {

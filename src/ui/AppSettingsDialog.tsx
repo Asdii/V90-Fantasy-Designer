@@ -24,7 +24,7 @@ export function AppSettingsDialog({ settings, onChange, onClose }: AppSettingsDi
         <header className="settingsHeader">
           <div>
             <h2 id="settings-title">App Settings</h2>
-            <p>Appearance</p>
+            <p>Appearance and experimental tools</p>
           </div>
           <button className="toolbarButton" onClick={onClose}>Close</button>
         </header>
@@ -90,6 +90,21 @@ export function AppSettingsDialog({ settings, onChange, onClose }: AppSettingsDi
               />
               Reduce interface motion
             </label>
+          </SettingRow>
+          <SettingRow label="Experimental">
+            <div className="settingsOptionStack">
+              <label className="settingsToggle">
+                <input
+                  type="checkbox"
+                  checked={settings.experimentalWheelTierGuide}
+                  onChange={(event) => onChange({ ...settings, experimentalWheelTierGuide: event.target.checked })}
+                />
+                Physical wheel and 45° tier guide
+              </label>
+              <small>
+                Shows wheel runout and estimated tier dimensions in the Cut panel. It does not change committed cut geometry.
+              </small>
+            </div>
           </SettingRow>
         </div>
       </section>

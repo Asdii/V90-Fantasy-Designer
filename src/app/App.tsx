@@ -821,6 +821,9 @@ export function App() {
                 showVGroovePreview={showVGroovePreview}
                 cutOperationState={cutOperationState}
                 cutPlaneReferenceFacetId={project.cutOperations[0]?.facetId}
+                experimentalWheelTierGuide={appSettings.experimentalWheelTierGuide}
+                wheelDiameterMm={appSettings.wheelDiameterMm}
+                tierAngleDeg={appSettings.tierAngleDeg}
                 onEnvironmentPresetChange={setEnvironmentPreset}
                 onCleanRenderChange={setCleanRender}
                 onMaterialChange={setGemMaterial}
@@ -834,6 +837,8 @@ export function App() {
                 onCreateCuts={createCuts}
                 onFitPatternToFacet={fitPatternToFacet}
                 onUndoLastCut={undoLastCut}
+                onWheelDiameterChange={(wheelDiameterMm) => setAppSettings((current) => ({ ...current, wheelDiameterMm }))}
+                onTierAngleChange={(tierAngleDeg) => setAppSettings((current) => ({ ...current, tierAngleDeg }))}
               />
             </aside>
           </section>

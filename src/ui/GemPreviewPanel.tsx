@@ -4,6 +4,7 @@ import { gemMaterialPresets } from '../materials/GemMaterial';
 import type { GemEnvironmentPreset } from '../rendering/EnvironmentPreset';
 import type { PatternPlacement } from '../patterns/placement/PatternPlacement';
 import {
+  calculateWheelTierGuide,
   calculateVGrooveDimensions,
   type VGrooveCutterPreset,
   type VGrooveDisplayMode,
@@ -26,6 +27,9 @@ interface GemPreviewPanelProps {
   readonly showVGroovePreview: boolean;
   readonly cutOperationState: { readonly status: 'idle' | 'running' | 'success' | 'error'; readonly message?: string };
   readonly cutPlaneReferenceFacetId?: number;
+  readonly experimentalWheelTierGuide: boolean;
+  readonly wheelDiameterMm: number;
+  readonly tierAngleDeg: number;
   readonly onEnvironmentPresetChange: (environment: GemEnvironmentPreset) => void;
   readonly onCleanRenderChange: (enabled: boolean) => void;
   readonly onMaterialChange: (material: GemMaterial) => void;
@@ -39,6 +43,8 @@ interface GemPreviewPanelProps {
   readonly onCreateCuts: () => void;
   readonly onFitPatternToFacet: () => void;
   readonly onUndoLastCut: () => void;
+  readonly onWheelDiameterChange: (diameterMm: number) => void;
+  readonly onTierAngleChange: (angleDeg: number) => void;
 }
 
 export function GemPreviewPanel({
@@ -57,6 +63,9 @@ export function GemPreviewPanel({
   showVGroovePreview,
   cutOperationState,
   cutPlaneReferenceFacetId,
+  experimentalWheelTierGuide,
+  wheelDiameterMm,
+  tierAngleDeg,
   onEnvironmentPresetChange,
   onCleanRenderChange,
   onMaterialChange,
@@ -70,10 +79,18 @@ export function GemPreviewPanel({
   onCreateCuts,
   onFitPatternToFacet,
   onUndoLastCut,
+  onWheelDiameterChange,
+  onTierAngleChange,
 }: GemPreviewPanelProps) {
   const geometry = project.geometry;
   const selectedFacet = selectedFacetId !== undefined ? geometry?.facets.find((facet) => facet.id === selectedFacetId) : undefined;
   const grooveDimensions = calculateVGrooveDimensions(vGrooveSettings);
+  const wheelTierGuide = calculateWheelTierGuide({
+    depthMm: vGrooveSettings.depthMm,
+    wheelDiameterMm,
+    tierAngleDeg,
+    facetNormal: selectedFacet?.normal,
+  });
 
   return (
     <aside className="modelInfoPanel" data-tour="gem-controls">
@@ -235,6 +252,46 @@ export function GemPreviewPanel({
         <dt>Width</dt>
         <dd>{grooveDimensions.widthMm.toFixed(3)} mm</dd>
       </dl>
+      {experimentalWheelTierGuide ? (
+        <section className="experimentalTierGuide" aria-label="Experimental physical wheel and tier guide">
+          <header>
+            <strong>Physical Wheel / Tier Guide</strong>
+            <span>Experimental</span>
+          </header>
+          <NumberInput
+            label="Wheel diameter"
+            value={wheelDiameterMm}
+            min={0.001}
+            max={1000}
+            step={0.1}
+            onChange={(value) => onWheelDiameterChange(clampNumber(value, 0.001, 1000, 20))}
+          />
+          <NumberInput
+            label="Tier angle"
+            value={tierAngleDeg}
+            min={0.001}
+            max={89.999}
+            step={0.1}
+            onChange={(value) => onTierAngleChange(clampNumber(value, 0.001, 89.999, 45))}
+          />
+          <dl>
+            <dt>Facet angle</dt>
+            <dd>{wheelTierGuide.facetAngleDeg === undefined ? 'Select a facet' : `${wheelTierGuide.facetAngleDeg.toFixed(2)}°`}</dd>
+            <dt>Wheel reach</dt>
+            <dd>{wheelTierGuide.runoutAlongFacetMm.toFixed(3)} mm</dd>
+            <dt>Est. axial height</dt>
+            <dd>{selectedFacet ? `${wheelTierGuide.estimatedTierAxialHeightMm.toFixed(3)} mm` : 'Select a facet'}</dd>
+            <dt>Est. tier width</dt>
+            <dd>{selectedFacet ? `${wheelTierGuide.estimatedTierSurfaceWidthMm.toFixed(3)} mm` : 'Select a facet'}</dd>
+          </dl>
+          {!wheelTierGuide.depthWithinWheelRadius ? (
+            <p className="errorText">Depth cannot pass the physical wheel radius.</p>
+          ) : null}
+          <p className="experimentalNote">
+            Conservative estimate for a cut meeting the tier perpendicularly. Oblique cuts and the exact wheel profile require physical verification.
+          </p>
+        </section>
+      ) : null}
       <label className="numberRow">
         Display
         <select className="toolbarSelect" value={vGrooveDisplayMode} onChange={(event) => onVGrooveDisplayModeChange(event.target.value as VGrooveDisplayMode)}>
@@ -262,6 +319,10 @@ export function GemPreviewPanel({
 
 function clampDepth(value: number) {
   return Math.round(Math.min(5, Math.max(0.001, value)) * 1000) / 1000;
+}
+
+function clampNumber(value: number, min: number, max: number, fallback: number) {
+  return Math.min(max, Math.max(min, Number.isFinite(value) ? value : fallback));
 }
 
 function NumberInput({

@@ -12,6 +12,9 @@ export interface AppSettings {
   readonly gridContrast: GridContrast;
   readonly showStatusBar: boolean;
   readonly reducedMotion: boolean;
+  readonly experimentalWheelTierGuide: boolean;
+  readonly wheelDiameterMm: number;
+  readonly tierAngleDeg: number;
 }
 
 export const APP_SETTINGS_STORAGE_KEY = 'v90-fantasy-designer.settings.v1';
@@ -24,6 +27,9 @@ export const defaultAppSettings: AppSettings = {
   gridContrast: 'soft',
   showStatusBar: true,
   reducedMotion: false,
+  experimentalWheelTierGuide: false,
+  wheelDiameterMm: 20,
+  tierAngleDeg: 45,
 };
 
 export function loadAppSettings(storage?: Pick<Storage, 'getItem'>): AppSettings {
@@ -51,7 +57,16 @@ export function normalizeAppSettings(value: unknown): AppSettings {
     gridContrast: settings.gridContrast === 'strong' ? 'strong' : 'soft',
     showStatusBar: settings.showStatusBar !== false,
     reducedMotion: settings.reducedMotion === true,
+    experimentalWheelTierGuide: settings.experimentalWheelTierGuide === true,
+    wheelDiameterMm: clampFinite(settings.wheelDiameterMm, 0.001, 1000, 20),
+    tierAngleDeg: clampFinite(settings.tierAngleDeg, 0.001, 89.999, 45),
   };
+}
+
+function clampFinite(value: unknown, min: number, max: number, fallback: number) {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? Math.min(max, Math.max(min, value))
+    : fallback;
 }
 
 function isVisibility(value: unknown): value is InterfaceVisibility {
