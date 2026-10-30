@@ -121,7 +121,7 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              '1. Enciende la máquina.\n2. En los ajustes Wi-Fi del celular, conéctate a MicroFantasy-… con la clave de configuración de tu dispositivo.\n3. Regresa aquí. Este paso solo es necesario la primera vez o al cambiar de red.',
+              '1. Enciende la máquina.\n2. En los ajustes Wi-Fi del celular, conéctate a MicroFantasy-… con la password fantasy123.\n3. Regresa aquí. Este paso solo es necesario la primera vez o al cambiar de red.',
             ),
             if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
               TextButton.icon(

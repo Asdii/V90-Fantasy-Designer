@@ -128,41 +128,21 @@ muestra el visor completo con navegación, Horizontal/Vertical y Volver a 0°.
 Ejemplo: [examples/v90-cut-helper.json](examples/v90-cut-helper.json).
 Contrato y coordenadas: [guía V90 → MicroFantasy](../docs/microfantasy-lan.md).
 
-## Recepción local desde V90
+## Recepcion local desde V90
 
-La integración utiliza `FantasyDesignerService`. V90 ya incluye **Send to MicroFantasy**
-en su cabecera y dentro del Cut Helper, habilitado cuando existen cortes creados.
-Los trabajos simples anteriores y el modo simulación siguen funcionando sin V90.
+Activa Configuracion > V90 Fantasy Designer > Recibir por Wi-Fi y manten la app
+abierta. En V90 usa Send to MicroFantasy > Find phone, o introduce la IP del movil.
+No hay codigo de enlace. POST /api/v1/jobs acepta JSON sin Authorization y responde
+202 para un trabajo pendiente: el usuario decide abrirlo o reemplazar el actual.
 
-1. Conecta móvil y ordenador a la misma red.
-2. Activa Configuración → V90 Fantasy Designer → **Recibir por Wi-Fi**.
-3. La app muestra sus direcciones reales y un código de enlace de esa sesión.
-4. En V90 pulsa **Send to MicroFantasy**, introduce dirección/código y envía.
-   Si X no marca cero en el centro de referencia, introduce esa lectura en el campo
-   X del centro. MicroFantasy aplica la compensación de calibración al objetivo recibido.
-5. El emisor usa:
+Find phone utiliza el ESP32 actualizado como puente. Para descubrir el movil debe
+estar conectado al ESP32 (sin simulacion) y con el receptor activo. IP manual
+funciona sin ESP32. Chrome/Edge pueden pedir permiso de red local.
+Si la red no permite conectar, Download JSON e Importar archivo JSON conservan
+el mismo Cut Helper. El receptor solo escucha en primer plano.
 
-```http
-POST http://IP_DEL_MOVIL:8787/api/v1/jobs
-Content-Type: application/json
-Authorization: Bearer CODIGO_DE_ENLACE
-```
-
-Cuerpo: el JSON de trabajo anterior. Respuesta **202**: propuesta aceptada en la cola; no significa que se haya reemplazado el trabajo abierto.
-
-`GET /api/v1/status` devuelve el estado mínimo del receptor. No publica el código ni los trabajos.
-
-Límite del receptor: 1 MiB por mensaje, cola de 10 propuestas, timeout de cuerpo de 10 s. JSON inválido se rechaza antes de tocar el trabajo actual. Se guarda el último recibido; el aviso ofrece **Abrir** o **Reemplazar trabajo actual**. Los trabajos recibidos se archivan localmente.
-
-El receptor sólo escucha en primer plano. Al salir se cierra y se invalida el código; al regresar se puede activar de nuevo. Un cambio de Wi-Fi requiere reactivar para actualizar direcciones. HTTP local no está cifrado: usar una red de confianza.
-
-La app usa `allowBrowserPairing: true`: el primer trabajo válido con código correcto
-vincula el origen de V90 a esa sesión. El constructor conserva el modo estricto por
-defecto y también permite `allowedOrigins` explícitos. Chrome/Edge pueden solicitar
-permiso de red local; si el navegador bloquea la conexión, **Download JSON** en V90
-y **Importar archivo JSON** en el móvil transfieren el mismo visor completo.
-No se anuncia todavía el receptor por mDNS; su dirección se copia desde la app.
-
+Limites: 1 MiB por trabajo, 10 propuestas pendientes y timeout de cuerpo de 10 s.
+JSON invalido se rechaza antes de modificar el trabajo actual.
 Contrato detallado: [receptor](lib/services/fantasy_designer/README.md).
 
 ## ESP32

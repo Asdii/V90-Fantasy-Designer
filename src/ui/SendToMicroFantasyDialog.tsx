@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { CutHelperStep, CutHelperView } from '../grooves/CutHelper';
 import { createMicroFantasyJob } from '../integrations/MicroFantasyJob';
-import { microFantasyBaseUrl, MicroFantasyClient } from '../integrations/MicroFantasyClient';
+import { discoverMicroFantasy, microFantasyBaseUrl, MicroFantasyClient } from '../integrations/MicroFantasyClient';
 
 export function SendToMicroFantasyDialog({ steps, view, defaultName, onClose }: {
   steps: readonly CutHelperStep[]; view: CutHelperView; defaultName: string; onClose: () => void;
 }) {
   const [address, setAddress] = useState(() => { try { return localStorage.getItem('microfantasy.address') ?? ''; } catch { return ''; } });
-  const [token, setToken] = useState('');
+  const [phones, setPhones] = useState<string[]>([]);
   const [name, setName] = useState(defaultName);
   const [centerX, setCenterX] = useState('0');
   const [status, setStatus] = useState('');
@@ -16,7 +16,25 @@ export function SendToMicroFantasyDialog({ steps, view, defaultName, onClose }: 
   const active = useRef<AbortController | null>(null);
   const [jobId] = useState(() => crypto.randomUUID());
   const count = useMemo(() => new Set(steps.map((s) => s.operationId)).size, [steps]);
-  useEffect(() => () => active.current?.abort(), []);
+  useEffect(() => {
+    void findPhone();
+    return () => { active.current?.abort(); active.current = null; };
+  }, []);
+  async function findPhone() {
+    if (active.current) return;
+    const controller = new AbortController(); active.current = controller;
+    setBusy(true); setFailed(false); setStatus('Looking for MicroFantasy…');
+    try {
+      const found = await discoverMicroFantasy(address, controller.signal);
+      if (controller.signal.aborted) return;
+      setPhones(found);
+      if (found.length === 1) setAddress(found[0]);
+      setStatus(found.length ? 'Phone found. Select its address and send the Cut Helper.' :
+        'No phone found automatically. Keep MicroFantasy receiving over Wi-Fi and connected to the ESP32, or enter the phone IP below.');
+    } finally {
+      if (!controller.signal.aborted) { setBusy(false); active.current = null; }
+    }
+  }
   const job = () => createMicroFantasyJob(steps, { jobId, name, view, machineCenterXmm: Number(centerX.replace(',', '.')) });
   const connect = async (send: boolean) => {
     if (active.current) return;
@@ -25,7 +43,7 @@ export function SendToMicroFantasyDialog({ steps, view, defaultName, onClose }: 
     try {
       const base = microFantasyBaseUrl(address);
       const client = new MicroFantasyClient(base);
-      if (send) await client.send(job(), token, controller.signal); else await client.check(controller.signal);
+      if (send) await client.send(job(), controller.signal); else await client.check(controller.signal);
       try { localStorage.setItem('microfantasy.address', base.origin); } catch { /* Address storage is optional. */ }
       setStatus(send ? 'Received by MicroFantasy. Tap Open on the phone to start.' : 'MicroFantasy is available and supports this Cut Helper.');
     } catch (error) {
@@ -54,14 +72,16 @@ export function SendToMicroFantasyDialog({ steps, view, defaultName, onClose }: 
         <label>X at the facet center (mm)<input type="number" step="0.001" value={centerX} onChange={(e) => setCenterX(e.target.value)} disabled={busy} /></label>
         <small>Use 0 if the X reading is zero at the reference center. Otherwise enter that reading. Calibration compensation is applied by MicroFantasy.</small>
         <ol><li>On the phone, open Configuration → V90 Fantasy Designer → Receive over Wi-Fi.</li>
-          <li>Keep the app open on the same network. Copy its address and pairing code below.</li></ol>
+          <li>Keep the app open on the same network. No pairing code is needed.</li></ol>
+        {phones.length > 1 && <label>Phones found<select value={address} onChange={(e) => setAddress(e.target.value)}>
+          <option value="">Choose phone</option>{phones.map((phone) => <option key={phone} value={phone}>{phone}</option>)}</select></label>}
         <label>Phone address<input placeholder="http://192.168.1.20:8787" value={address} onChange={(e) => setAddress(e.target.value)} disabled={busy} autoComplete="off" /></label>
-        <label>Pairing code<input type="password" value={token} onChange={(e) => setToken(e.target.value.trim())} disabled={busy} autoComplete="off" /></label>
         <small>Your browser may ask for local network access. If it blocks LAN connections, the JSON file includes the complete same viewer.</small>
         <p role={failed ? 'alert' : 'status'} className={failed ? 'mobileSendError' : ''}>{status}</p>
         <div className="mobileSendActions">
+          <button className="toolbarButton" disabled={busy} onClick={() => void findPhone()}>Find phone</button>
           <button className="toolbarButton" disabled={busy || !address.trim()} onClick={() => void connect(false)}>Test connection</button>
-          <button className="toolbarButton active" disabled={busy || !address.trim() || !token || !name.trim() || !centerX.trim()} onClick={() => void connect(true)}>{busy ? 'Please wait…' : 'Send Cut Helper'}</button>
+          <button className="toolbarButton active" disabled={busy || !address.trim() || !name.trim() || !centerX.trim()} onClick={() => void connect(true)}>{busy ? 'Please wait…' : 'Send Cut Helper'}</button>
           <button className="toolbarButton" disabled={busy} onClick={download}>Download JSON</button>
         </div>
       </div>

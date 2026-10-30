@@ -99,13 +99,14 @@ class SettingsScreen extends StatelessWidget {
             if (c.receiving) ...[
               SelectableText(c.receiverAddress),
               const SizedBox(height: 6),
-              SelectableText('Código de enlace: ${c.pairingToken ?? ''}'),
+              const Text(
+                'Sin código de enlace. Usa Buscar teléfono en V90 o introduce esta dirección.',
+              ),
               TextButton.icon(
-                onPressed: () => Clipboard.setData(
-                  ClipboardData(text: c.pairingToken ?? ''),
-                ),
+                onPressed: () =>
+                    Clipboard.setData(ClipboardData(text: c.receiverAddress)),
                 icon: const Icon(Icons.copy_outlined),
-                label: const Text('Copiar código'),
+                label: const Text('Copiar dirección'),
               ),
             ],
             OutlinedButton.icon(

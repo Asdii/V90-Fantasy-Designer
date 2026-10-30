@@ -5,7 +5,7 @@ import type { CutOperation } from '../project/GemProject';
 import { buildCutHelperSequence } from '../project/CutHelperSequence';
 import { calculateCutAngleDeg, calculateLineDistanceFromOriginMm, type CutInstruction } from '../grooves/CutHelper';
 import { createMicroFantasyJob } from './MicroFantasyJob';
-import { MicroFantasyClient, microFantasyBaseUrl } from './MicroFantasyClient';
+import { discoverMicroFantasy, MicroFantasyClient, microFantasyBaseUrl } from './MicroFantasyClient';
 
 const reference: FacetLocalGeometry = { frame: { origin: { x: 10, y: 4, z: 0 }, uAxis: { x: 1, y: 0, z: 0 },
   vAxis: { x: 0, y: 1, z: 0 }, normal: { x: 0, y: 0, z: 1 } },
@@ -30,6 +30,24 @@ function exported() {
 }
 
 describe('V90 → MicroFantasy shared contract', () => {
+  it('discovers through ESP32, deduplicates and verifies actual receiver capabilities', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (String(input).includes('/api/v1/apps')) return Response.json({ service: 'microfantasy-machine', api_version: 1,
+        apps: ['http://192.168.1.8:8787', 'http://192.168.1.8:8787', 'https://example.com'] });
+      return Response.json({ service: 'microfantasy', api_version: 1, accepting_jobs: true, cut_helper_versions: [1] });
+    });
+    expect(await discoverMicroFantasy('', new AbortController().signal, fetcher)).toEqual(['http://192.168.1.8:8787']);
+    expect(fetcher).toHaveBeenCalledTimes(2);
+    expect(fetcher.mock.calls[0][1]).toMatchObject({ targetAddressSpace: 'local', credentials: 'omit', redirect: 'error' });
+  });
+  it('uses remembered phone when machine is absent and never sends jobs during discovery', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockImplementation(async (input) => {
+      if (String(input).includes('/api/v1/apps')) throw new TypeError('offline');
+      return Response.json({ service: 'microfantasy', api_version: 1, accepting_jobs: true, cut_helper_versions: [1] });
+    });
+    expect(await discoverMicroFantasy('192.168.1.9', new AbortController().signal, fetcher)).toEqual(['http://192.168.1.9:8787']);
+    expect(fetcher.mock.calls.every(([, init]) => !init?.method || init.method === 'GET')).toBe(true);
+  });
   it('exports the exact fixture parsed and rendered by Flutter, including rebased operations', () => {
     expect(exported()).toEqual(fixture);
     expect(exported().steps.map((s) => s.x)).toEqual([12.5, 11.5, 13]);
@@ -43,21 +61,21 @@ describe('V90 → MicroFantasy shared contract', () => {
     expect(microFantasyBaseUrl('http://phone.local:8888/api/v1/jobs').origin).toBe('http://phone.local:8888');
     for (const input of ['https://example.com', 'http://user:pass@192.168.1.2', 'file:///a', 'http://192.168.1.1/other', 'http://10.0.0.1?token=abc']) expect(() => microFantasyBaseUrl(input)).toThrow();
   });
-  it('checks capabilities, requests LAN access, then posts the complete job with pairing', async () => {
+  it('checks capabilities, requests LAN access, then posts the complete job without pairing', async () => {
     const fetcher = vi.fn<typeof fetch>()
       .mockResolvedValueOnce(Response.json({ service: 'microfantasy', api_version: 1, accepting_jobs: true, cut_helper_versions: [1] }))
       .mockResolvedValueOnce(Response.json({ status: 'pending', job_id: fixture.jobId, cut_helper_version: 1 }, { status: 202 }));
     const client = new MicroFantasyClient(microFantasyBaseUrl('192.168.1.2'), fetcher);
-    await client.send(exported(), 'a'.repeat(32));
+    await client.send(exported());
     expect(fetcher).toHaveBeenCalledTimes(2);
     const request = fetcher.mock.calls[1][1]!;
     expect(request).toMatchObject({ method: 'POST', targetAddressSpace: 'local', redirect: 'error', credentials: 'omit' });
     expect(JSON.parse(request.body as string)).toEqual(fixture);
-    expect(request.headers).toMatchObject({ Authorization: `Bearer ${'a'.repeat(32)}` });
+    expect(request.headers).toEqual({ 'Content-Type': 'application/json' });
   });
   it('does not send to old mobile versions or silently accept a mismatching receipt', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ service: 'microfantasy', api_version: 1, accepting_jobs: true }));
-    await expect(new MicroFantasyClient(microFantasyBaseUrl('127.0.0.1'), fetcher).send(exported(), 'a'.repeat(32))).rejects.toThrow('Update MicroFantasy');
+    await expect(new MicroFantasyClient(microFantasyBaseUrl('127.0.0.1'), fetcher).send(exported())).rejects.toThrow('Update MicroFantasy');
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
   it('shows a useful error for a blocked or unreachable LAN', async () => {

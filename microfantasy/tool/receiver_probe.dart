@@ -8,11 +8,10 @@ import 'package:microfantasy/services/fantasy_designer/local_receiver_service.da
 Future<void> main() async {
   final receiver = LocalReceiverService(
     bindAddress: '127.0.0.1',
-    allowBrowserPairing: true,
+    allowBrowserAccess: true,
   );
   await receiver.start();
   stdout.writeln('Local test receiver: ${receiver.endpoints.single}');
-  stdout.writeln('Temporary test pairing code: ${receiver.pairingToken}');
   final done = Completer<void>();
   final subscription = receiver.pendingJobs.listen((job) async {
     final file = File('build/qa/browser-received-job.json');

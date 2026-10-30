@@ -10,13 +10,13 @@ class LocalReceiverService extends ReceiverCore {
     super.maxPendingJobs,
     this.bodyTimeout = const Duration(seconds: 10),
     Set<String> allowedOrigins = const {},
-    this.allowBrowserPairing = false,
+    this.allowBrowserAccess = false,
   }) : allowedOrigins = Set.unmodifiable(allowedOrigins);
   final int port;
   final String bindAddress;
   final Duration bodyTimeout;
   final Set<String> allowedOrigins;
-  final bool allowBrowserPairing;
+  final bool allowBrowserAccess;
   @override
   bool get supportsNativeReceiver => false;
   @override
@@ -30,7 +30,6 @@ class LocalReceiverService extends ReceiverCore {
 
   @override
   Future<void> stop() async {
-    endPairingSession();
     publishStatus(ReceiverState.stopped);
   }
 }

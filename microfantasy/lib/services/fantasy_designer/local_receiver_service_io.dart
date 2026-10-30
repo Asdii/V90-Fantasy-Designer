@@ -14,7 +14,7 @@ class LocalReceiverService extends ReceiverCore {
     super.maxPendingJobs,
     this.bodyTimeout = const Duration(seconds: 10),
     Set<String> allowedOrigins = const {},
-    this.allowBrowserPairing = false,
+    this.allowBrowserAccess = false,
   }) : allowedOrigins = Set.unmodifiable(allowedOrigins) {
     if (port < 0 || port > 65535) throw ArgumentError.value(port, 'port');
     if (bodyTimeout <= Duration.zero) {
@@ -28,8 +28,7 @@ class LocalReceiverService extends ReceiverCore {
   final String bindAddress;
   final Duration bodyTimeout;
   final Set<String> allowedOrigins;
-  final bool allowBrowserPairing;
-  String? _pairedOrigin;
+  final bool allowBrowserAccess;
   HttpServer? _server;
   Future<void>? _starting;
   int _generation = 0;
@@ -58,8 +57,6 @@ class LocalReceiverService extends ReceiverCore {
       _server = server;
       server.idleTimeout = bodyTimeout;
       server.autoCompress = false;
-      beginPairingSession();
-      _pairedOrigin = null;
       publishStatus(
         ReceiverState.listening,
         port: server.port,
@@ -82,7 +79,6 @@ class LocalReceiverService extends ReceiverCore {
       );
     } catch (_) {
       if (generation == _generation && !isDisposed) {
-        endPairingSession();
         publishStatus(
           ReceiverState.error,
           message: 'Could not open the receiver port',
@@ -96,8 +92,6 @@ class LocalReceiverService extends ReceiverCore {
   Future<void> stop() async {
     _generation++;
     _starting = null;
-    endPairingSession();
-    _pairedOrigin = null;
     final server = _server;
     _server = null;
     publishStatus(ReceiverState.stopped);
@@ -159,7 +153,7 @@ class LocalReceiverService extends ReceiverCore {
       if (origin != null) {
         final parsed = Uri.tryParse(origin);
         final browserCandidate =
-            allowBrowserPairing &&
+            allowBrowserAccess &&
             parsed != null &&
             ['http', 'https'].contains(parsed.scheme) &&
             parsed.host.isNotEmpty &&
@@ -167,13 +161,11 @@ class LocalReceiverService extends ReceiverCore {
             parsed.path.isEmpty &&
             !parsed.hasQuery &&
             !parsed.hasFragment;
-        if (!allowedOrigins.contains(origin) &&
-            !(browserCandidate &&
-                (_pairedOrigin == null || _pairedOrigin == origin))) {
+        if (!allowedOrigins.contains(origin) && !browserCandidate) {
           throw const ReceiverProtocolException(
             403,
             'origin_not_allowed',
-            'Origin is not paired for this receiver',
+            'Origin is not allowed for this receiver',
           );
         }
         response.headers.set('Access-Control-Allow-Origin', origin);
@@ -193,10 +185,7 @@ class LocalReceiverService extends ReceiverCore {
           'Access-Control-Allow-Methods',
           '$allowedMethod, OPTIONS',
         );
-        response.headers.set(
-          'Access-Control-Allow-Headers',
-          'Authorization, Content-Type, X-Pairing-Token',
-        );
+        response.headers.set('Access-Control-Allow-Headers', 'Content-Type');
         if (request.headers.value('access-control-request-private-network') ==
             'true') {
           response.headers.set('Access-Control-Allow-Private-Network', 'true');
@@ -219,26 +208,12 @@ class LocalReceiverService extends ReceiverCore {
           'api_version': 1,
           'state': currentStatus.state.name,
           'accepting_jobs': true,
-          'pairing_required': true,
+          'pairing_required': false,
           'pending_count': pendingQueue.length,
           'cut_helper_versions': [1],
           'max_job_bytes': maxBodyBytes,
         });
         return;
-      }
-      final authorization = request.headers.value(
-        HttpHeaders.authorizationHeader,
-      );
-      final supplied =
-          authorization != null && authorization.startsWith('Bearer ')
-          ? authorization.substring(7)
-          : request.headers.value('x-pairing-token');
-      if (!pairingTokensEqual(pairingToken, supplied)) {
-        throw const ReceiverProtocolException(
-          401,
-          'unauthorized',
-          'A valid pairing token is required',
-        );
       }
       final type = request.headers.contentType;
       if (type?.mimeType.toLowerCase() != 'application/json' ||
@@ -270,7 +245,7 @@ class LocalReceiverService extends ReceiverCore {
         timeout: bodyTimeout,
         deferCancel: (cancel) => cancelBody = cancel,
       );
-      if (!_active(generation) || !pairingTokensEqual(pairingToken, supplied)) {
+      if (!_active(generation)) {
         throw const ReceiverProtocolException(
           503,
           'receiver_inactive',
@@ -278,19 +253,6 @@ class LocalReceiverService extends ReceiverCore {
         );
       }
       final job = decodeReceivedJob(bytes, maxBodyBytes: maxBodyBytes);
-      // Pin the browser only after token AND body validation; preflight never pairs.
-      if (origin != null && allowBrowserPairing) {
-        if (_pairedOrigin != null &&
-            _pairedOrigin != origin &&
-            !allowedOrigins.contains(origin)) {
-          throw const ReceiverProtocolException(
-            403,
-            'origin_not_allowed',
-            'Another page is already paired.',
-          );
-        }
-        _pairedOrigin ??= origin;
-      }
       queuePendingJob(job); // Does not replace any active job.
       await _respond(response, HttpStatus.accepted, {
         'status': 'pending',

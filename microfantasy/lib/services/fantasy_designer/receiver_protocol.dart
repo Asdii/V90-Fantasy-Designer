@@ -140,16 +140,3 @@ Future<List<int>> readReceiverBody(
   );
   return result.future;
 }
-
-bool pairingTokensEqual(String? expected, String? supplied) {
-  if (expected == null ||
-      supplied == null ||
-      expected.length != supplied.length) {
-    return false;
-  }
-  var difference = 0;
-  for (var i = 0; i < expected.length; i++) {
-    difference |= expected.codeUnitAt(i) ^ supplied.codeUnitAt(i);
-  }
-  return difference == 0;
-}

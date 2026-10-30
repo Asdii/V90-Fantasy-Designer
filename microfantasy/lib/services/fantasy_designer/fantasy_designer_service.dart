@@ -6,7 +6,6 @@ abstract interface class FantasyDesignerService {
   List<FantasyJob> get pendingQueue;
   Stream<ReceiverStatus> get statusStream;
   ReceiverStatus get currentStatus;
-  String? get pairingToken;
 
   /// Actual listening addresses for this session; empty when stopped or on web.
   List<Uri> get endpoints;
@@ -14,7 +13,7 @@ abstract interface class FantasyDesignerService {
   Future<void> start();
   Future<void> stop();
 
-  /// Call from the app lifecycle; leaving foreground stops and unpairs receiver.
+  /// Call from the app lifecycle; leaving foreground stops the receiver.
   Future<void> setForeground(bool foreground);
   void acknowledgePendingJob(FantasyJob job);
   Future<void> dispose();

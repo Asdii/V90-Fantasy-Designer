@@ -140,6 +140,37 @@ void MachineNetwork::begin(Configuration& configuration) {
     if (config->ssid.isEmpty()) startAp();
     else WiFi.begin(config->ssid.c_str(), config->password.c_str());
     lostAt = attemptAt = millis();
+    // OS captive-network probes are expected when joining a Wi-Fi without Internet.
+    auto setupPage = [] {
+        http.send(200, "text/html; charset=utf-8", "<h2>MicroFantasy</h2><p>Conectado a la maquina. Abre MicroFantasy y elige Configurar Wi-Fi de la maquina. Esta red no tiene Internet.</p>");
+    };
+    http.on("/", HTTP_GET, setupPage);
+    http.on("/generate_204", HTTP_GET, setupPage);
+    http.on("/gen_204", HTTP_GET, setupPage);
+    http.on("/hotspot-detect.html", HTTP_GET, setupPage);
+    http.on("/connecttest.txt", HTTP_GET, setupPage);
+    http.on("/favicon.ico", HTTP_GET, [] { http.send(204); });
+    // Browser discovery bridge. Only active sensor clients become candidates;
+    // V90 verifies each candidate's /api/v1/status before offering it to the user.
+    http.on("/api/v1/apps", HTTP_OPTIONS, [] {
+        http.sendHeader("Access-Control-Allow-Origin", "*");
+        http.sendHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        http.sendHeader("Access-Control-Allow-Private-Network", "true");
+        http.send(204);
+    });
+    http.on("/api/v1/apps", HTTP_GET, [] {
+        http.sendHeader("Access-Control-Allow-Origin", "*");
+        JsonDocument doc;
+        doc["service"] = "microfantasy-machine";
+        doc["api_version"] = 1;
+        JsonArray apps = doc["apps"].to<JsonArray>();
+        for (uint8_t client = 0; client < WEBSOCKETS_SERVER_CLIENT_MAX; ++client) {
+            if (ws.clientIsConnected(client)) {
+                apps.add("http://" + ws.remoteIP(client).toString() + ":8787");
+            }
+        }
+        reply(200, doc);
+    });
     http.on("/api/v1/setup", HTTP_GET, [] {
         if (!setupRequest()) { http.send(403); return; }
         JsonDocument doc;

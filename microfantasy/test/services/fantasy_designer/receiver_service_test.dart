@@ -37,7 +37,6 @@ void main() {
       socket.write(
         'POST /api/v1/jobs HTTP/1.1\r\n'
         'Host: localhost\r\nContent-Type: application/json\r\n'
-        'Authorization: Bearer ${receiver.pairingToken}\r\n'
         'Content-Length: 100\r\n\r\n{',
       );
       await socket.flush();
@@ -135,7 +134,6 @@ void main() {
       expect(receiver.supportsNativeReceiver, false);
       await receiver.start();
       expect(receiver.currentStatus.state, ReceiverState.simulation);
-      expect(receiver.pairingToken, isNull);
       final incoming = receiver.pendingJobs.first;
       receiver.simulateIncomingJob(jobJson());
       expect(identical(await incoming, receiver.pendingQueue.single), true);
@@ -172,7 +170,6 @@ void main() {
     Future<(int, Map<String, dynamic>)> request({
       String path = '/api/v1/jobs',
       String method = 'POST',
-      String? token,
       String? body,
       String? origin,
       String contentType = 'application/json',
@@ -181,7 +178,6 @@ void main() {
         method,
         Uri.parse('http://127.0.0.1:${receiver.currentStatus.port}$path'),
       );
-      if (token != null) req.headers.set('Authorization', 'Bearer $token');
       if (origin != null) req.headers.set('Origin', origin);
       req.headers.set('Content-Type', contentType);
       if (body != null) req.write(body);
@@ -195,83 +191,47 @@ void main() {
       );
     }
 
-    test(
-      'requires token and emits pending proposal, status never reveals token',
-      () async {
-        expect(receiver.endpoints.single.host, '127.0.0.1');
-        expect(receiver.endpoints.single.port, receiver.currentStatus.port);
-        final json = jsonEncode(jobJson());
-        expect((await request(body: json)).$1, 401);
-        expect((await request(token: 'wrong', body: json)).$1, 401);
-        final event = receiver.pendingJobs.first;
-        final response = await request(
-          token: receiver.pairingToken,
-          body: json,
-        );
-        expect(response.$1, 202);
-        expect(response.$2['status'], 'pending');
-        expect(identical(await event, receiver.pendingQueue.single), true);
-        expect(receiver.currentStatus.endpoints, receiver.endpoints);
-        expect(receiver.endpoints, isNotEmpty);
-        final status = await request(path: '/api/v1/status', method: 'GET');
-        expect(status.$1, 200);
-        expect(status.$2['pending_count'], 1);
-        expect(jsonEncode(status.$2), isNot(contains(receiver.pairingToken!)));
-        expect(status.$2.containsKey('jobs'), false);
-      },
-    );
+    test('accepts jobs without token and emits a pending proposal', () async {
+      expect(receiver.endpoints.single.host, '127.0.0.1');
+      expect(receiver.endpoints.single.port, receiver.currentStatus.port);
+      final json = jsonEncode(jobJson());
+      final event = receiver.pendingJobs.first;
+      final response = await request(body: json);
+      expect(response.$1, 202);
+      expect(response.$2['status'], 'pending');
+      expect(identical(await event, receiver.pendingQueue.single), true);
+      expect(receiver.currentStatus.endpoints, receiver.endpoints);
+      expect(receiver.endpoints, isNotEmpty);
+      final status = await request(path: '/api/v1/status', method: 'GET');
+      expect(status.$1, 200);
+      expect(status.$2['pending_count'], 1);
+      expect(status.$2.containsKey('jobs'), false);
+    });
 
     test(
       'reports routes, media, JSON, validation, size and queue errors',
       () async {
-        final token = receiver.pairingToken;
         expect((await request(path: '/unknown')).$1, 404);
         expect((await request(method: 'GET')).$1, 405);
-        expect(
-          (await request(
-            token: token,
-            contentType: 'text/plain',
-            body: '{}',
-          )).$1,
-          415,
-        );
-        expect(
-          (await request(token: token, body: '{')).$2['error']['code'],
-          'invalid_json',
-        );
-        expect(
-          (await request(token: token, body: '{}')).$2['error']['code'],
-          'invalid_job',
-        );
-        expect((await request(token: token, body: ' ' * 1025)).$1, 413);
+        expect((await request(contentType: 'text/plain', body: '{}')).$1, 415);
+        expect((await request(body: '{')).$2['error']['code'], 'invalid_json');
+        expect((await request(body: '{}')).$2['error']['code'], 'invalid_job');
+        expect((await request(body: ' ' * 1025)).$1, 413);
         expect(receiver.pendingQueue, isEmpty);
-        expect(
-          (await request(token: token, body: jsonEncode(jobJson('1')))).$1,
-          202,
-        );
-        expect(
-          (await request(token: token, body: jsonEncode(jobJson('2')))).$1,
-          202,
-        );
-        expect(
-          (await request(token: token, body: jsonEncode(jobJson('3')))).$1,
-          429,
-        );
+        expect((await request(body: jsonEncode(jobJson('1')))).$1, 202);
+        expect((await request(body: jsonEncode(jobJson('2')))).$1, 202);
+        expect((await request(body: jsonEncode(jobJson('3')))).$1, 429);
         receiver.acknowledgePendingJob(receiver.pendingQueue.first);
-        expect(
-          (await request(token: token, body: jsonEncode(jobJson('3')))).$1,
-          202,
-        );
+        expect((await request(body: jsonEncode(jobJson('3')))).$1, 202);
       },
     );
 
     test(
-      'rejects untrusted browser origins; trusted origin still requires pairing',
+      'rejects untrusted browser origins and accepts trusted origin without pairing',
       () async {
         expect(
           (await request(
             origin: 'https://untrusted.example',
-            token: receiver.pairingToken,
             body: jsonEncode(jobJson()),
           )).$1,
           403,
@@ -281,12 +241,11 @@ void main() {
             origin: 'https://designer.example',
             body: jsonEncode(jobJson()),
           )).$1,
-          401,
+          202,
         );
         expect(
           (await request(
             origin: 'https://designer.example',
-            token: receiver.pairingToken,
             body: jsonEncode(jobJson()),
           )).$1,
           202,
@@ -302,21 +261,15 @@ void main() {
     );
 
     test(
-      'foreground lifecycle stops/unpairs and resume needs explicit start',
+      'foreground lifecycle stops reception and resume needs explicit start',
       () async {
-        final oldToken = receiver.pairingToken;
         await receiver.setForeground(false);
-        expect(receiver.pairingToken, isNull);
         expect(receiver.currentStatus.isRunning, false);
         expect(receiver.start, throwsStateError);
         await receiver.setForeground(true);
         expect(receiver.currentStatus.isRunning, false);
         await receiver.start();
-        expect(receiver.pairingToken, isNot(oldToken));
-        expect(
-          (await request(token: oldToken, body: jsonEncode(jobJson()))).$1,
-          401,
-        );
+        expect((await request(body: jsonEncode(jobJson()))).$1, 202);
       },
     );
 
@@ -326,7 +279,6 @@ void main() {
       await receiver.stop();
       await opening;
       expect(receiver.currentStatus.isRunning, false);
-      expect(receiver.pairingToken, isNull);
     });
   });
 }

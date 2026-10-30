@@ -16,7 +16,7 @@ void main() {
     MicroFantasyApp(
       controller: AppController(
         store: SharedPreferencesStore(),
-        designer: LocalReceiverService(allowBrowserPairing: true),
+        designer: LocalReceiverService(allowBrowserAccess: true),
         updateService: GithubUpdateService(),
       ),
     ),

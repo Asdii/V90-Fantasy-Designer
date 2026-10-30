@@ -39,8 +39,8 @@ export class MicroFantasyClient {
     }
     const data = await response.json().catch(() => null);
     if (!response.ok) {
-      if (response.status === 401) throw new Error('The pairing code is incorrect or expired. Copy the current code from the phone.');
-      if (response.status === 403) throw new Error('This receiver is paired to another page. Disable and enable Receive over Wi-Fi on the phone.');
+      if (response.status === 401) throw new Error('Update MicroFantasy on the phone to send without a pairing code.');
+      if (response.status === 403) throw new Error('This receiver does not allow this page. Update MicroFantasy on the phone.');
       if (response.status === 413) throw new Error('This job exceeds the receiver limit. Use Download JSON and import it in MicroFantasy.');
       throw new Error(`MicroFantasy rejected the job (${response.status}): ${data?.error?.message ?? 'Please review the phone.'}`);
     }
@@ -58,15 +58,42 @@ export class MicroFantasyClient {
     return { maxBytes: Number.isSafeInteger(data.max_job_bytes) && data.max_job_bytes > 0 ? data.max_job_bytes : 1048576 };
   }
 
-  async send(job: MicroFantasyJob, token: string, signal?: AbortSignal) {
-    if (!/^[A-Za-z0-9_-]{32}$/.test(token.trim())) throw new Error('Paste the complete pairing code shown in MicroFantasy.');
+  async send(job: MicroFantasyJob, signal?: AbortSignal) {
     const { maxBytes } = await this.check(signal);
     const body = JSON.stringify(job);
     if (new TextEncoder().encode(body).byteLength > maxBytes) throw new Error('This job is too large for LAN transfer. Download the JSON and import it in the app.');
     const data = await this.request('/api/v1/jobs', { method: 'POST',
-      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token.trim()}` }, body }, signal);
+      headers: { 'Content-Type': 'application/json' }, body }, signal);
     if (data?.status !== 'pending' || data.job_id !== job.jobId || data.cut_helper_version !== 1) {
       throw new Error('The receiver did not confirm this Cut Helper. Check the phone before trying again.');
     }
   }
+}
+
+/** No subnet sweep: probe the last address and the ESP32's live client list. */
+export async function discoverMicroFantasy(previous: string, signal: AbortSignal,
+  fetcher: typeof fetch = (input, init) => fetch(input, init)): Promise<string[]> {
+  const candidates = new Set<string>();
+  if (previous.trim()) {
+    try { candidates.add(microFantasyBaseUrl(previous).origin); } catch { /* Ignore obsolete address. */ }
+  }
+  const init: LocalRequest = { signal: AbortSignal.any([signal, AbortSignal.timeout(3500)]),
+    mode: 'cors', credentials: 'omit', cache: 'no-store', redirect: 'error', targetAddressSpace: 'local' };
+  try {
+    const response = await fetcher('http://fantasy-machine.local/api/v1/apps', init);
+    const data = await response.json();
+    if (response.ok && data?.service === 'microfantasy-machine' && data.api_version === 1 && Array.isArray(data.apps)) {
+      for (const address of data.apps.slice(0, 5)) {
+        if (typeof address !== 'string') continue;
+        try { candidates.add(microFantasyBaseUrl(address).origin); } catch { /* Never probe external addresses. */ }
+      }
+    }
+  } catch { /* ESP32 may be absent; the remembered address still works. */ }
+  if (signal.aborted) return [];
+  const checks = await Promise.allSettled([...candidates].map(async (address) => {
+    await new MicroFantasyClient(microFantasyBaseUrl(address), fetcher).check(
+      AbortSignal.any([signal, AbortSignal.timeout(3500)]));
+    return address;
+  }));
+  return checks.flatMap((result) => result.status === 'fulfilled' ? [result.value] : []);
 }

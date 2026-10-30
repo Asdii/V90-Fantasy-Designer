@@ -97,7 +97,6 @@ class AppController extends ChangeNotifier {
       : 'Desconectado · esperando lectura';
   bool get receiverSupported => designer.supportsNativeReceiver;
   bool get receiving => designer.currentStatus.isRunning;
-  String? get pairingToken => designer.pairingToken;
   String get receiverLabel =>
       receiving ? 'Disponible para recibir' : 'No detectado';
   String get receiverAddress => designer.endpoints.isEmpty

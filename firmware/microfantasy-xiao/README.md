@@ -47,11 +47,10 @@ arduinoWebSockets 2.7.1, ArduinoJson 7.4.2. No se usa OTA en esta primera versi�
 
 ## Primera conexión desde el celular
 
-1. Abre Serial a 115200 y pulsa RESET. Aparecen la red `MicroFantasy-XXXXXX` y
-   su **clave única**, generada aleatoriamente y conservada en NVS. Guarda esa
-   clave en una etiqueta del dispositivo. No es la contraseña de tu casa.
-   Si el mensaje inicial se perdió, mantén BOOT durante 3 segundos **después de
-   arrancar** para mostrarla y reabrir la configuración.
+1. El ESP32 crea la red MicroFantasy-XXXXXX con password **fantasy123**.
+   Esta version reemplaza la clave aleatoria anterior y conserva el Wi-Fi de casa.
+   Si el celular recuerda la clave vieja, olvida esa red y vuelve a conectarte.
+   BOOT durante 3 segundos despues de arrancar reabre la configuracion.
 2. Instala la nueva versión de MicroFantasy. En **Configuración → Máquina →
    Configurar Wi-Fi de la máquina**, abre los ajustes Wi-Fi y conéctate a esa red.
    Acepta permanecer conectado aunque Android avise que no hay Internet. En iOS,
@@ -143,7 +142,7 @@ Disponible únicamente desde la interfaz AP, no desde la red doméstica:
 - `400`: campos inválidos; `403`: fuera del AP; `409`: otro intento en curso.
 - Nunca devuelve ni registra la contraseña doméstica. La app no la persiste.
 
-El AP usa WPA2 con clave por dispositivo. La configuración HTTP viaja sobre ese
+El AP usa WPA2 con la clave compartida fantasy123. La configuración HTTP viaja sobre ese
 enlace; WebSocket usa la LAN de confianza sin autenticación adicional/TLS.
 No exponer puertos 80/81 a Internet. NVS no está cifrada en esta primera versión.
 
@@ -178,3 +177,13 @@ hardware. Esta implementación por ISR no promete los 650 mm/s máximos del chip
 - [PlatformIO XIAO ESP32-C3](https://docs.platformio.org/en/latest/boards/espressif32/seeed_xiao_esp32c3.html)
 - [Espressif Wi-Fi API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/wifi.html)
 - [arduinoWebSockets](https://github.com/Links2004/arduinoWebSockets)
+
+
+## Descubrimiento del telefono desde V90
+
+GET http://fantasy-machine.local/api/v1/apps devuelve los clientes WebSocket
+conectados como candidatos en el puerto 8787. V90 verifica cada receptor antes
+de ofrecerlo. Buscar no envia trabajos. La app debe estar abierta, conectada al
+ESP32 (sin simulacion) y con Recibir por Wi-Fi activo. El navegador debe resolver
+el hostname y permitir red local. La IP manual sigue disponible sin ESP32.
+No se requiere codigo de emparejamiento.

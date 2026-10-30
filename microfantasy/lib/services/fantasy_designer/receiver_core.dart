@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:math';
 import '../../models/fantasy_job.dart';
 import 'fantasy_designer_service.dart';
 import 'receiver_protocol.dart';
@@ -23,7 +22,6 @@ abstract class ReceiverCore implements FantasyDesignerService {
   );
   bool isDisposed = false;
   bool isForeground = true;
-  String? _token;
 
   @override
   Stream<FantasyJob> get pendingJobs => _jobs.stream;
@@ -34,8 +32,6 @@ abstract class ReceiverCore implements FantasyDesignerService {
   @override
   ReceiverStatus get currentStatus => _status;
   @override
-  String? get pairingToken => _token;
-  @override
   List<Uri> get endpoints => _status.endpoints;
 
   void checkCanStart() {
@@ -44,15 +40,6 @@ abstract class ReceiverCore implements FantasyDesignerService {
       throw StateError('Receiver is only available in the foreground');
     }
   }
-
-  void beginPairingSession() {
-    final random = Random.secure();
-    _token = base64Url
-        .encode(List<int>.generate(24, (_) => random.nextInt(256)))
-        .replaceAll('=', '');
-  }
-
-  void endPairingSession() => _token = null;
 
   void publishStatus(
     ReceiverState state, {
