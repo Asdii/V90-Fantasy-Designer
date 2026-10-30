@@ -1,0 +1,4 @@
+# Gradle's Linux launcher must keep LF when edited on Windows.
+/gradlew text eol=lf
+/gradlew.bat text eol=crlf
+/gradle/wrapper/gradle-wrapper.jar binary
