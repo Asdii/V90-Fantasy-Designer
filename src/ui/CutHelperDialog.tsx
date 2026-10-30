@@ -1,27 +1,19 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { FacetLocalGeometry } from '../geometry/FacetLocalGeometry';
+import type { CutHelperStep, CutHelperView } from '../grooves/CutHelper';
+import { createCutHelperViewport } from '../grooves/CutHelperViewport';
 import {
   calculateCutHelperPatternOffset,
   calculateCutHelperStageRotation,
   type CutHelperDirection,
-  type CutInstruction,
 } from '../grooves';
-
-export interface CutHelperStep {
-  readonly operationId: string;
-  readonly operationNumber: number;
-  readonly facetId: number;
-  readonly localGeometry: FacetLocalGeometry;
-  readonly instruction: CutInstruction;
-  readonly grooveWidthMm: number;
-}
 
 interface CutHelperDialogProps {
   readonly steps: readonly CutHelperStep[];
   readonly onClose: () => void;
+  readonly onSend?: (view: CutHelperView) => void;
 }
 
-export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
+export function CutHelperDialog({ steps, onClose, onSend }: CutHelperDialogProps) {
   const [stepIndex, setStepIndex] = useState(0);
   const [orientationDeg, setOrientationDeg] = useState(0);
   const [cutDirection, setCutDirection] = useState<CutHelperDirection>('horizontal');
@@ -29,7 +21,7 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
   const activeStep = steps[activeIndex];
   const instruction = activeStep?.instruction;
   const viewport = useMemo(
-    () => activeStep ? createViewport(activeStep.localGeometry, steps) : undefined,
+    () => activeStep ? createCutHelperViewport(activeStep.localGeometry, steps) : undefined,
     [activeStep, steps],
   );
   const wheelTicks = useMemo(() => viewport ? createAngleTicks(viewport.wheelRadius) : [], [viewport]);
@@ -77,6 +69,7 @@ export function CutHelperDialog({ steps, onClose }: CutHelperDialogProps) {
             <p>{activeStep ? `Operation ${activeStep.operationNumber} · Reference facet ${activeStep.facetId}` : 'Completed cutting sequence'}</p>
           </div>
           <div className="cutHelperHeaderActions">
+            {onSend ? <button className="toolbarButton" onClick={() => onSend({ stepIndex: activeIndex, direction: cutDirection, orientation: orientationDeg === 0 ? 'zero' : 'cut' })}>Send to MicroFantasy</button> : null}
             <div className="cutHelperDirection" role="group" aria-label="Cut direction">
               <button className={cutDirection === 'horizontal' ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setCutDirection('horizontal')}>Horizontal →</button>
               <button className={cutDirection === 'vertical' ? 'toolbarButton active' : 'toolbarButton'} onClick={() => setCutDirection('vertical')}>Vertical ↑</button>
@@ -185,37 +178,6 @@ function Metric({ label, value }: { readonly label: string; readonly value: stri
   );
 }
 
-function createViewport(localGeometry: FacetLocalGeometry, steps: readonly CutHelperStep[]) {
-  const diagonal = Math.max(Math.hypot(localGeometry.bounds.width, localGeometry.bounds.height), 0.5);
-  const facetRadius = Math.max(...localGeometry.boundary.map((point) => Math.hypot(point.u, point.v)), diagonal / 2);
-  const cutRadius = steps.reduce((maximum, step) => {
-    const visibleSegments = step.instruction.visibleSegments.length > 0
-      ? step.instruction.visibleSegments
-      : [step.instruction.segment];
-    return visibleSegments.reduce((segmentMaximum, segment) => Math.max(
-      segmentMaximum,
-      Math.hypot(segment.start.u, segment.start.v),
-      Math.hypot(segment.end.u, segment.end.v),
-    ), maximum);
-  }, 0);
-  const widestGroove = steps.reduce((maximum, step) => Math.max(maximum, step.grooveWidthMm), 0);
-  const contentRadius = Math.max(facetRadius, cutRadius);
-  const wheelRadius = Math.max(contentRadius * 1.18, contentRadius + widestGroove * 3, 0.5);
-  const extent = wheelRadius * 1.2;
-  const x = -extent;
-  const y = -extent;
-  const width = extent * 2;
-  const height = extent * 2;
-  return {
-    x,
-    y,
-    width,
-    height,
-    wheelRadius,
-    hairline: Math.max(diagonal * 0.0025, 0.01),
-    viewBox: `${x} ${y} ${width} ${height}`,
-  };
-}
 
 function createAngleTicks(radius: number) {
   return Array.from({ length: 72 }, (_, index) => {

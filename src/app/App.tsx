@@ -17,7 +17,6 @@ import {
   calculateVGrooveDimensions,
   createCutInstructions,
   defaultVGrooveSettings,
-  rebaseCutInstruction,
   type VGrooveCutterPreset,
   type VGrooveDisplayMode,
   type VGrooveSettings,
@@ -52,6 +51,9 @@ import type { LightingPreset } from '../rendering/Scene';
 import type { GemEnvironmentPreset } from '../rendering/EnvironmentPreset';
 import { GemPreviewPanel } from '../ui/GemPreviewPanel';
 import { CutHelperDialog } from '../ui/CutHelperDialog';
+import { SendToMicroFantasyDialog } from '../ui/SendToMicroFantasyDialog';
+import { buildCutHelperSequence } from '../project/CutHelperSequence';
+import type { CutHelperView } from '../grooves/CutHelper';
 import { FacetMeasurementDialog, type FacetMeasurementResult } from '../ui/FacetMeasurementDialog';
 import { AppSettingsDialog } from '../ui/AppSettingsDialog';
 import { HelpDialog } from '../ui/HelpDialog';
@@ -153,6 +155,7 @@ export function App() {
   const [cutOperationState, setCutOperationState] = useState<CutOperationState>({ status: 'idle' });
   const [cutPreviewGeometry, setCutPreviewGeometry] = useState<GemGeometry | undefined>();
   const [showCutHelper, setShowCutHelper] = useState(false);
+  const [sendMobileView, setSendMobileView] = useState<CutHelperView>();
   const [showFacetMeasurement, setShowFacetMeasurement] = useState(false);
   const [facetMeasurementMessage, setFacetMeasurementMessage] = useState<string>();
   const [facetMeasurementSession, setFacetMeasurementSession] = useState<FacetMeasurementSession>(() => createDefaultFacetMeasurementSession());
@@ -231,24 +234,7 @@ export function App() {
     return () => window.clearTimeout(timer);
   }, [workspaceCacheReady, workspaceSnapshot]);
 
-  const cutHelperSteps = useMemo(() => {
-    const referenceOperation = project.cutOperations[0];
-    if (!referenceOperation) {
-      return [];
-    }
-
-    const referenceGeometry = referenceOperation.cutHelper.localGeometry;
-    return project.cutOperations.flatMap((operation, operationIndex) =>
-      operation.cutHelper.instructions.map((instruction) => ({
-        operationId: operation.id,
-        operationNumber: operationIndex + 1,
-        facetId: referenceOperation.facetId,
-        localGeometry: referenceGeometry,
-        instruction: rebaseCutInstruction(instruction, operation.cutHelper.localGeometry, referenceGeometry),
-        grooveWidthMm: operation.cutHelper.grooveWidthMm,
-      })),
-    );
-  }, [project.cutOperations]);
+  const cutHelperSteps = useMemo(() => buildCutHelperSequence(project.cutOperations), [project.cutOperations]);
   const measurementFacet = useMemo(() => {
     if (!project.geometry || selectedFacetId === undefined) {
       return undefined;
@@ -704,6 +690,10 @@ export function App() {
         <button data-tour="cut-helper" className="toolbarButton" disabled={cutHelperSteps.length === 0} onClick={() => setShowCutHelper(true)}>
           Cut Helper
         </button>
+        <button className="toolbarButton" disabled={cutHelperSteps.length === 0 || cutOperationState.status === 'running'}
+          onClick={() => setSendMobileView({ stepIndex: 0, direction: 'horizontal', orientation: 'cut' })}>
+          Send to MicroFantasy
+        </button>
         <button
           className="toolbarButton"
           data-tour="measure-facet"
@@ -860,8 +850,14 @@ export function App() {
       {showCutHelper && cutHelperSteps.length > 0 ? (
         <CutHelperDialog
           steps={cutHelperSteps}
+          onSend={(view) => { setShowCutHelper(false); setSendMobileView(view); }}
           onClose={() => setShowCutHelper(false)}
         />
+      ) : null}
+      {sendMobileView && cutHelperSteps.length > 0 ? (
+        <SendToMicroFantasyDialog steps={cutHelperSteps} view={sendMobileView}
+          defaultName={project.source?.filename.replace(/\.stl$/i, '') ?? 'V90 design'}
+          onClose={() => setSendMobileView(undefined)} />
       ) : null}
       {showFacetMeasurement && measurementFacet ? (
         <FacetMeasurementDialog

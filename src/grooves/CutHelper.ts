@@ -30,6 +30,22 @@ export interface CutHelperSnapshot {
 
 export type CutHelperDirection = 'horizontal' | 'vertical';
 
+/** Ordered, already rebased history used by both viewers and mobile export. */
+export interface CutHelperStep {
+  readonly operationId: string;
+  readonly operationNumber: number;
+  readonly facetId: number;
+  readonly localGeometry: FacetLocalGeometry;
+  readonly instruction: CutInstruction;
+  readonly grooveWidthMm: number;
+}
+
+export interface CutHelperView {
+  readonly stepIndex: number;
+  readonly direction: CutHelperDirection;
+  readonly orientation: 'cut' | 'zero';
+}
+
 export function calculateCutHelperStageRotation(angleDeg: number) {
   return angleDeg;
 }
@@ -82,13 +98,18 @@ export function calculateCutAngleDeg(segment: LineSegment2D): number {
 
 /** Unsigned perpendicular distance from facet-local origin to the infinite cut line. */
 export function calculateLineDistanceFromOriginMm(segment: LineSegment2D): number {
+  return Math.abs(calculateSignedLineDistanceMm(segment));
+}
+
+/** Signed cross-track X: right of the oriented path, relative to the reference center. */
+export function calculateSignedLineDistanceMm(segment: LineSegment2D): number {
   const du = segment.end.u - segment.start.u;
   const dv = segment.end.v - segment.start.v;
   const length = Math.hypot(du, dv);
   if (length <= DIRECTION_EPSILON) {
     return 0;
   }
-  return Math.abs(segment.start.u * dv - segment.start.v * du) / length;
+  return (segment.start.u * dv - segment.start.v * du) / length;
 }
 
 function segmentLength(segment: LineSegment2D) {

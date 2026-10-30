@@ -187,3 +187,18 @@ npm run build
 npm run build:pages
 npm run preview
 ```
+
+## MicroFantasy: enviar el Cut Helper al móvil
+
+Con cortes ya creados, **Send to MicroFantasy** envía por LAN todos los pasos,
+distancias, profundidades y la geometría del Cut Helper. La app móvil incluye el
+mismo visor 2D con rueda y navegación. También se puede exportar/importar el JSON.
+
+Consulta la [guía de conexión y protocolo](docs/microfantasy-lan.md) y el
+[proyecto Flutter](microfantasy/README.md). La app móvil debe estar actualizada
+y tener activada **Recibir por Wi-Fi**.
+
+Cada push a `main` también puede publicar el APK Android de MicroFantasy mediante
+GitHub Actions. La app busca actualizaciones e incluye un botón de descarga.
+Requiere configurar una vez los secretos de firma; consulta la
+[guía de actualizaciones](docs/microfantasy-updates.md).

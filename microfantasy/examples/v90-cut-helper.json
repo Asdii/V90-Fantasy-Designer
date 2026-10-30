@@ -1,0 +1,151 @@
+{
+  "jobId": "v90-contract-fixture",
+  "name": "V90 reference demo",
+  "units": "mm",
+  "steps": [
+    {
+      "index": 1,
+      "angleR": 0,
+      "x": 12.5,
+      "depth": 0.03
+    },
+    {
+      "index": 2,
+      "angleR": 0,
+      "x": 11.5,
+      "depth": 0.03
+    },
+    {
+      "index": 3,
+      "angleR": 90,
+      "x": 13,
+      "depth": 0.05
+    }
+  ],
+  "cutHelper": {
+    "version": 1,
+    "coordinateSystem": "facet-local-mm-y-up",
+    "referenceFacetId": 7,
+    "boundary": [
+      {
+        "u": -2,
+        "v": -1
+      },
+      {
+        "u": 3,
+        "v": -1
+      },
+      {
+        "u": 3,
+        "v": 2
+      },
+      {
+        "u": -2,
+        "v": 2
+      }
+    ],
+    "viewport": {
+      "extent": 5.105460606057009,
+      "wheelRadius": 4.254550505047508,
+      "hairline": 0.01457737973711325
+    },
+    "initialView": {
+      "stepIndex": 2,
+      "direction": "vertical",
+      "orientation": "cut"
+    },
+    "machineCenterXmm": 12,
+    "steps": [
+      {
+        "index": 1,
+        "operationId": "first",
+        "operationNumber": 1,
+        "distanceFromCenterMm": 0.5,
+        "signedDistanceMm": 0.5,
+        "grooveWidthMm": 0.06,
+        "segment": {
+          "start": {
+            "u": -2,
+            "v": -0.5
+          },
+          "end": {
+            "u": 3,
+            "v": -0.5
+          }
+        },
+        "visibleSegments": [
+          {
+            "start": {
+              "u": -2,
+              "v": -0.5
+            },
+            "end": {
+              "u": 3,
+              "v": -0.5
+            }
+          }
+        ]
+      },
+      {
+        "index": 2,
+        "operationId": "first",
+        "operationNumber": 1,
+        "distanceFromCenterMm": 0.5,
+        "signedDistanceMm": -0.5,
+        "grooveWidthMm": 0.06,
+        "segment": {
+          "start": {
+            "u": -2,
+            "v": 0.5
+          },
+          "end": {
+            "u": 3,
+            "v": 0.5
+          }
+        },
+        "visibleSegments": [
+          {
+            "start": {
+              "u": -2,
+              "v": 0.5
+            },
+            "end": {
+              "u": 3,
+              "v": 0.5
+            }
+          }
+        ]
+      },
+      {
+        "index": 3,
+        "operationId": "second",
+        "operationNumber": 2,
+        "distanceFromCenterMm": 1,
+        "signedDistanceMm": 1,
+        "grooveWidthMm": 0.1,
+        "segment": {
+          "start": {
+            "u": 1,
+            "v": -1
+          },
+          "end": {
+            "u": 1,
+            "v": 2
+          }
+        },
+        "visibleSegments": [
+          {
+            "start": {
+              "u": 1,
+              "v": -1
+            },
+            "end": {
+              "u": 1,
+              "v": 2
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
