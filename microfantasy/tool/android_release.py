@@ -48,6 +48,30 @@ def prepare():
             output.write(f"{key}={metadata[key]}\n")
 
 
+def verified_certificate(output, expected):
+    """Parse verified apksigner output across Android build-tools versions.
+
+    Call only after apksigner exits successfully. Source stamps and historical
+    lineage certificates are not the APK's signing identity.
+    """
+    expected = expected.strip().lower()
+    if not re.fullmatch(r"[a-f0-9]{64}", expected):
+        raise ValueError("Invalid expected signing certificate")
+    certificates = re.findall(
+        r"^(?:V\d+(?:\.\d+)* )?Signer(?: #\d+)?(?::)?"
+        r"(?: \(minSdkVersion=[^\r\n]*\))? certificate SHA-256 digest: ([a-fA-F0-9]{64})\s*$",
+        output, re.MULTILINE)
+    counts = re.findall(r"^Number of signers: (\d+)\s*$", output, re.MULTILINE)
+    if any(int(count) != 1 for count in counts):
+        raise ValueError("Expected exactly one verified APK signer")
+    identities = {certificate.lower() for certificate in certificates}
+    if not identities:
+        raise ValueError("No APK signing certificate recognized in apksigner output")
+    if identities != {expected}:
+        raise ValueError("APK signing certificate differs from the configured update identity")
+    return expected
+
+
 def package():
     metadata = json.loads((OUT / "metadata.json").read_text(encoding="utf-8"))
     sdk = Path(os.environ.get("ANDROID_HOME") or os.environ["ANDROID_SDK_ROOT"])
@@ -56,13 +80,11 @@ def package():
     apk = Path("build/app/outputs/flutter-apk/app-release.apk")
     signer = tools / ("apksigner.bat" if os.name == "nt" else "apksigner")
     aapt = tools / ("aapt.exe" if os.name == "nt" else "aapt")
-    signed = subprocess.check_output([str(signer), "verify", "--print-certs", str(apk)], text=True)
-    certificates = re.findall(r"Signer #\d+ certificate SHA-256 digest: ([a-fA-F0-9]{64})", signed)
-    if len(certificates) != 1:
-        raise ValueError("Expected exactly one verified APK signer")
-    expected = os.environ.get("EXPECTED_CERTIFICATE_SHA256", "").lower()
-    if not expected or certificates[0].lower() != expected:
-        raise ValueError("APK signing certificate differs from the configured update identity")
+    print(f"Verifying APK with Android build-tools {tools.name}", flush=True)
+    signed = subprocess.check_output([str(signer), "verify", "--verbose", "--print-certs", str(apk)], text=True)
+    # Certificate fingerprints are public; preserve diagnostic output in CI.
+    print(signed, flush=True)
+    certificate = verified_certificate(signed, os.environ.get("EXPECTED_CERTIFICATE_SHA256", ""))
     badging = subprocess.check_output([str(aapt), "dump", "badging", str(apk)], text=True)
     package_info = re.search(r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'", badging)
     if not package_info or package_info.groups() != (APP_ID, str(metadata["code"]), metadata["name"]):
@@ -70,7 +92,7 @@ def package():
     if "application-debuggable" in badging:
         raise ValueError("Cannot publish a debuggable APK")
     digest = hashlib.sha256(apk.read_bytes()).hexdigest()
-    data = manifest(metadata, digest, certificates[0])
+    data = manifest(metadata, digest, certificate)
     shutil.copyfile(apk, OUT / "microfantasy.apk")
     (OUT / "microfantasy-update.json").write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
     today = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
