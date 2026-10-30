@@ -1,5 +1,12 @@
 # ESP32 communication API
 
+The matching XIAO ESP32-C3 + AS5311 firmware is in
+[`firmware/microfantasy-xiao`](../../../../../firmware/microfantasy-xiao/README.md).
+Settings → Configurar Wi-Fi de la máquina uses `MachineProvisioningService`,
+separate from telemetry, to configure the first-boot AP. The password is never
+stored by the app. Join its Wi-Fi once through the phone's system settings;
+after setup use the home LAN, port 81, path `/ws` and `_fantasy-machine._tcp`.
+
 Parent app dependency: `nsd: ^4.1.0` (installed). The implementation uses the
 startDiscovery/stopDiscovery API also in current 5.0.1 pub.dev docs (checked 2026-10-30).
 

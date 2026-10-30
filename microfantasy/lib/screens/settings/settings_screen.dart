@@ -4,6 +4,8 @@ import '../../app/app_controller.dart';
 import '../../models/app_settings.dart';
 import '../../widgets/common.dart';
 import '../../widgets/app_updates.dart';
+import '../../services/esp32/provisioning_service.dart';
+import 'machine_setup_dialog.dart';
 
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key, required this.controller});
@@ -48,6 +50,27 @@ class SettingsScreen extends StatelessWidget {
               spacing: 8,
               runSpacing: 8,
               children: [
+                OutlinedButton.icon(
+                  onPressed: () async {
+                    final ip = await showDialog<String>(
+                      context: context,
+                      builder: (_) => MachineSetupDialog(
+                        service: HttpMachineProvisioningService(),
+                      ),
+                    );
+                    if (ip != null) {
+                      await c.updateSettings(
+                        c.settings.copyWith(
+                          host: ip,
+                          port: 81,
+                          simulation: false,
+                        ),
+                      );
+                    }
+                  },
+                  icon: const Icon(Icons.add_link),
+                  label: const Text('Configurar Wi-Fi de la máquina'),
+                ),
                 OutlinedButton.icon(
                   onPressed: c.busy ? null : c.discoverMachine,
                   icon: const Icon(Icons.wifi_find),

@@ -1,0 +1,31 @@
+name: Check MicroFantasy firmware
+on:
+  push:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/microfantasy-firmware.yml'
+  pull_request:
+    paths:
+      - 'firmware/**'
+      - '.github/workflows/microfantasy-firmware.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  firmware:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: pip install platformio==6.2.0
+      - name: Test quadrature and position math
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/position_test.cpp -o /tmp/position-test
+          /tmp/position-test
+      - name: Build XIAO ESP32-C3 firmware
+        run: pio run -d firmware/microfantasy-xiao -e xiao_esp32c3

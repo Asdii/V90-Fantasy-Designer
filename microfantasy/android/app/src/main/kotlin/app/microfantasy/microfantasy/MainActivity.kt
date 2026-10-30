@@ -12,6 +12,17 @@ import java.security.MessageDigest
 class MainActivity : FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.microfantasy/network")
+            .setMethodCallHandler { call, result ->
+                if (call.method == "openWifiSettings") {
+                    try {
+                        startActivity(Intent(android.provider.Settings.ACTION_WIFI_SETTINGS))
+                        result.success(null)
+                    } catch (error: Exception) {
+                        result.error("wifi_settings_unavailable", error.message, null)
+                    }
+                } else result.notImplemented()
+            }
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "app.microfantasy/updates")
             .setMethodCallHandler { call, result ->
                 try {
