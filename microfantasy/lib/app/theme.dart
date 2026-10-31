@@ -7,8 +7,11 @@ const blue = Color(0xff187ba9);
 const pale = Color(0xfff4f8fb);
 
 /// Green stays reserved for measurement success in every appearance.
-ThemeData microTheme([AppearanceTheme appearance = AppearanceTheme.atelier]) {
+// Palette sources and persistence mappings are documented in docs/theme-palettes.md.
+// Neutral light/dark are app palettes; the others adapt published color sets.
+ThemeData microTheme([AppearanceTheme appearance = AppearanceTheme.light]) {
   final (
+    dark,
     primary,
     secondary,
     background,
@@ -16,65 +19,95 @@ ThemeData microTheme([AppearanceTheme appearance = AppearanceTheme.atelier]) {
     text,
     muted,
   ) = switch (appearance) {
-    AppearanceTheme.atelier => (
-      const Color(0xff174f79),
-      const Color(0xffa25e32),
-      const Color(0xfff1e9da),
-      const Color(0xfffffdf8),
-      const Color(0xff263742),
-      const Color(0xff59656c),
-    ),
-    AppearanceTheme.lagoon => (
-      const Color(0xff006c9c),
-      const Color(0xff2363aa),
-      const Color(0xffdfedf7),
-      const Color(0xfffbfdff),
-      const Color(0xff193747),
-      const Color(0xff516674),
-    ),
-    AppearanceTheme.porcelain => (
-      const Color(0xff344f76),
-      const Color(0xff9c5976),
-      const Color(0xffe9edf3),
+    AppearanceTheme.light => (
+      false,
+      const Color(0xff0969da),
+      const Color(0xff8250df),
+      const Color(0xfff6f8fa),
       const Color(0xffffffff),
-      const Color(0xff29313d),
-      const Color(0xff606773),
+      const Color(0xff1f2328),
+      const Color(0xff59636e),
     ),
-    AppearanceTheme.amethyst => (
-      const Color(0xff683da0),
-      const Color(0xff9d507d),
-      const Color(0xffeee2f9),
-      const Color(0xfffffbff),
-      const Color(0xff382d46),
-      const Color(0xff6e6178),
-    ),
-    AppearanceTheme.sunstone => (
-      const Color(0xff965c18),
-      const Color(0xff486d95),
-      const Color(0xfff7e8cd),
-      const Color(0xfffffaf0),
-      const Color(0xff453522),
-      const Color(0xff72604b),
-    ),
-    AppearanceTheme.arctic => (
-      const Color(0xff1455ba),
-      const Color(0xff744dab),
-      const Color(0xffe1e9fc),
-      const Color(0xfff8faff),
-      const Color(0xff1c3157),
-      const Color(0xff526682),
+    AppearanceTheme.dark => (
+      true,
+      const Color(0xffffffff),
+      const Color(0xffe8e8e8),
+      const Color(0xff000000),
+      const Color(0xff0a0a0a),
+      const Color(0xffffffff),
+      const Color(0xffc8c8c8),
     ),
     AppearanceTheme.midnight => (
-      const Color(0xff7dbfff),
-      const Color(0xffbc9bea),
-      const Color(0xff101c30),
-      const Color(0xff1b2c45),
-      const Color(0xffe8f1ff),
-      const Color(0xffb2c3dc),
+      true,
+      const Color(0xff7aa2f7),
+      const Color(0xffbb9af7),
+      const Color(0xff1a1b26),
+      const Color(0xff24283b),
+      const Color(0xffc0caf5),
+      const Color(0xffa9b1d6),
+    ),
+    AppearanceTheme.atelier => (
+      false,
+      const Color(0xff268bd2),
+      const Color(0xffb58900),
+      const Color(0xffeee8d5),
+      const Color(0xfffdf6e3),
+      const Color(0xff073642),
+      const Color(0xff586e75),
+    ),
+    AppearanceTheme.lagoon => (
+      true,
+      const Color(0xff88c0d0),
+      const Color(0xffb48ead),
+      const Color(0xff2e3440),
+      const Color(0xff3b4252),
+      const Color(0xffeceff4),
+      const Color(0xffd8dee9),
+    ),
+    AppearanceTheme.porcelain => (
+      false,
+      const Color(0xff1e66f5),
+      const Color(0xff8839ef),
+      const Color(0xffe6e9ef),
+      const Color(0xffeff1f5),
+      const Color(0xff4c4f69),
+      const Color(0xff5c5f77),
+    ),
+    AppearanceTheme.amethyst => (
+      true,
+      const Color(0xffbd93f9),
+      const Color(0xffff79c6),
+      const Color(0xff282a36),
+      const Color(0xff44475a),
+      const Color(0xfff8f8f2),
+      const Color(0xfff8f8f2),
+    ),
+    AppearanceTheme.sunstone => (
+      false,
+      const Color(0xffaf3a03),
+      const Color(0xffb57614),
+      const Color(0xffebdbb2),
+      const Color(0xfffbf1c7),
+      const Color(0xff3c3836),
+      const Color(0xff665c54),
+    ),
+    AppearanceTheme.arctic => (
+      false,
+      const Color(0xff4c566a),
+      const Color(0xff5e81ac),
+      const Color(0xffe5e9f0),
+      const Color(0xffeceff4),
+      const Color(0xff2e3440),
+      const Color(0xff4c566a),
     ),
   };
-  final dark = appearance == AppearanceTheme.midnight;
-  final onAccent = dark ? const Color(0xff0e223b) : Colors.white;
+  // Choose legible button text from the actual accent, not the theme brightness.
+  final onAccent = primary.computeLuminance() > .179
+      ? Colors.black
+      : Colors.white;
+  final onSecondary = secondary.computeLuminance() > .179
+      ? Colors.black
+      : Colors.white;
   Color tint(Color color, double opacity) =>
       Color.alphaBlend(color.withValues(alpha: opacity), surface);
   final colors = ColorScheme(
@@ -82,23 +115,23 @@ ThemeData microTheme([AppearanceTheme appearance = AppearanceTheme.atelier]) {
     primary: primary,
     onPrimary: onAccent,
     primaryContainer: tint(primary, dark ? .16 : .15),
-    onPrimaryContainer: primary,
+    onPrimaryContainer: text,
     primaryFixed: tint(primary, .12),
     primaryFixedDim: tint(primary, .22),
     onPrimaryFixed: text,
     onPrimaryFixedVariant: primary,
     secondary: secondary,
-    onSecondary: onAccent,
+    onSecondary: onSecondary,
     secondaryContainer: tint(secondary, .12),
-    onSecondaryContainer: secondary,
+    onSecondaryContainer: text,
     secondaryFixed: tint(secondary, .12),
     secondaryFixedDim: tint(secondary, .22),
     onSecondaryFixed: text,
     onSecondaryFixedVariant: secondary,
     tertiary: secondary,
-    onTertiary: onAccent,
+    onTertiary: onSecondary,
     tertiaryContainer: tint(secondary, .12),
-    onTertiaryContainer: secondary,
+    onTertiaryContainer: text,
     tertiaryFixed: tint(secondary, .12),
     tertiaryFixedDim: tint(secondary, .22),
     onTertiaryFixed: text,

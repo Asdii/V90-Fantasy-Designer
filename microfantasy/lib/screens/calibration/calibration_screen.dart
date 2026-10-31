@@ -124,10 +124,7 @@ class _CalibrationScreenState extends State<CalibrationScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text(
-                  'Un montaje, una referencia',
-                  style: theme.textTheme.titleLarge,
-                ),
+                Text('Calibración de X', style: theme.textTheme.titleLarge),
                 const SizedBox(height: 6),
                 Text(
                   'Cada punto se guarda automáticamente y se usa para compensar X.',

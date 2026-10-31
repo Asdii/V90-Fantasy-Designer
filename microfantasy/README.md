@@ -67,9 +67,9 @@ La simulación conserva la lectura manual y continúa publicándola; no caduca p
 
 Corte adapta el tamaño del dibujo al alto disponible; la regla X y los botones de paso permanecen visibles sin desplazar la pantalla. El Cut Helper tiene fondo transparente y puede ampliarse con el botón de la esquina del diagrama.
 
-La regla muestra posiciones X absolutas: la etiqueta central es siempre el **objetivo corregido** del paso. El cambio de escala interpola la magnificación y la línea del sensor se anima en todos los modos de respuesta visual. Las cifras, el estado de tolerancia y la calibración siguen utilizando la lectura original, sin suavizado. Al acercarse aparece una lupa con conectores al intervalo exacto de la regla principal.
+La regla muestra posiciones X absolutas: la etiqueta central es siempre el **objetivo corregido** del paso. Su rango permanece fijo en **±12,5 mm** (25 mm de extremo a extremo), sin cambiar de magnitud al acercarse ni al cambiar de paso. La línea del sensor mantiene su animación suave. Las cifras, el estado de tolerancia y la calibración siguen utilizando la lectura original, sin suavizado. Al acercarse aparece una lupa con conectores al intervalo exacto de la regla principal; la lupa no modifica la escala de esta última.
 
-Configuración se organiza como Máquina, V90 Fantasy Designer, Preferencias, Temas, Datos y Opciones avanzadas. Los temas persistentes son **Atelier, Lagoon, Porcelain, Amethyst, Sunstone, Arctic y Midnight** (oscuro). El verde continúa reservado para confirmar la posición.
+Configuración se organiza como Máquina, V90 Fantasy Designer, Preferencias, Temas, Datos y Opciones avanzadas. Los temas aparecen en este orden: **Claro, Oscuro, Midnight, Solarized Light, Nord, Catppuccin Latte, Dracula, Gruvbox Light y Nord Light**. Claro es el predeterminado en instalaciones nuevas. Oscuro combina fondo negro puro con texto y controles blancos. Las preferencias existentes se conservan. [Fuentes de las paletas y compatibilidad](docs/theme-palettes.md). El verde continúa reservado para confirmar la posición.
 
 ## Calibración y coordenadas
 
@@ -216,13 +216,14 @@ Referencias de implementación: [red en Flutter](https://docs.flutter.dev/data-a
 
 ## Apariencia y guía X
 
-Temas ofrece seis apariencias claras y Midnight oscuro, guardados localmente. El encabezado y
-los iconos Android/iOS usan el mismo dibujo vectorial de micromotor con gema.
+Los temas se guardan localmente. El encabezado y los iconos Android/iOS usan el
+mismo dibujo vectorial de micromotor con gema.
 Para regenerar los tamaños del icono: `flutter test tool/generate_app_icons.dart`.
 
-La escala de la barra X anima el acercamiento independientemente de la frecuencia
-de telemetría. Una lupa centrada sobre la barra aparece cerca del objetivo sin
-mover la barra principal. El zoom y suavizado son sólo visuales: las lecturas,
-la calibración y la comprobación de tolerancia siempre usan el dato real.
+La barra principal conserva su rango de ±12,5 mm. Una lupa centrada sobre ella
+aparece cerca del objetivo sin mover ni reescalar la barra principal. El marcador
+se anima independientemente de la frecuencia de telemetría. La lupa y el suavizado
+son sólo visuales: las lecturas, la calibración y la comprobación de tolerancia
+siempre usan el dato real.
 
 Modo simulación está en Configuración > Opciones avanzadas.

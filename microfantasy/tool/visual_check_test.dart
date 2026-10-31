@@ -89,6 +89,16 @@ void main() {
       find.byType(MicroFantasyApp),
       matchesGoldenFile('../build/qa/cut-v90.png'),
     );
+    for (final appearance in AppearanceTheme.values) {
+      await tester.runAsync(
+        () => c.updateSettings(c.settings.copyWith(appearance: appearance)),
+      );
+      await tester.pumpAndSettle();
+      await expectLater(
+        find.byType(MicroFantasyApp),
+        matchesGoldenFile('../build/qa/cut-theme-${appearance.name}.png'),
+      );
+    }
     await tester.runAsync(
       () => c.updateSettings(
         c.settings.copyWith(appearance: AppearanceTheme.midnight),

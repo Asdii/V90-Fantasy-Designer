@@ -26,7 +26,7 @@ class CutScreen extends StatelessWidget {
               Icon(Icons.polyline_outlined, size: 48, color: colors.primary),
               const SizedBox(height: 20),
               Text(
-                'Tu próximo diseño empieza aquí',
+                'Sin trabajo cargado',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.titleLarge,
               ),

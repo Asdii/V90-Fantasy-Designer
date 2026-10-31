@@ -46,73 +46,65 @@ void main() {
   group('X guide', () {
     for (final smoothing in ['off', 'light', 'medium']) {
       testWidgets(
-        'zoom finishes during 50 Hz telemetry with $smoothing smoothing',
+        'main ruler stays at ±12.5 mm throughout approach ($smoothing)',
         (tester) async {
-          await _guide(tester, 2, smoothing: smoothing);
-          await _guide(tester, 0.7, smoothing: smoothing);
-          expect(_painter(tester).range, 5);
-          await tester.pump(const Duration(milliseconds: 120));
-          expect(_painter(tester).range, allOf(greaterThan(1), lessThan(5)));
-
-          for (var packet = 0; packet < 30; packet++) {
-            final actual = 0.69 - packet * 0.001;
+          for (final actual in <double?>[
+            40,
+            13,
+            12.5,
+            5,
+            .8,
+            .15,
+            .08,
+            .005,
+            0,
+            -.05,
+            -.8,
+            -20,
+            null,
+          ]) {
             await _guide(tester, actual, smoothing: smoothing);
-            expect(
-              find.text('${actual.toStringAsFixed(3)} mm'),
-              findsOneWidget,
-            );
-            // The label is raw; every visual mode interpolates sensor packets.
-            expect(_painter(tester).actual, greaterThanOrEqualTo(actual));
-            await tester.pump(const Duration(milliseconds: 20));
+            for (final delay in [0, 20, 120, 650]) {
+              await tester.pump(Duration(milliseconds: delay));
+              expect(_painter(tester).range, 12.5);
+              expect(_painter(tester, _precisionBar).range, .1);
+            }
           }
-          expect(_painter(tester).range, 1);
-          expect(find.text('En tolerancia'), findsNothing);
           expect(tester.takeException(), isNull);
         },
       );
     }
 
-    testWidgets('zoom settles despite noise at both scale thresholds', (
+    testWidgets('fixed range survives targets, units and tolerance changes', (
       tester,
     ) async {
-      await _guide(tester, 2);
-      await _guide(tester, 0.79);
-      for (var packet = 0; packet < 32; packet++) {
-        await tester.pump(const Duration(milliseconds: 20));
-        await _guide(tester, packet.isEven ? 0.81 : 0.79);
+      for (final target in [-25.3, 0.0, 100.125]) {
+        for (final tolerance in [0.0, .02, .05, 1.0, 20.0]) {
+          for (final centimeters in [false, true]) {
+            await _guide(
+              tester,
+              target,
+              target: target,
+              tolerance: tolerance,
+              centimeters: centimeters,
+            );
+            await tester.pumpAndSettle();
+            expect(_painter(tester).range, 12.5);
+            expect(_painter(tester).tolerance, tolerance);
+            final unit = centimeters ? 'cm' : 'mm';
+            final digits = centimeters ? 4 : 3;
+            final factor = centimeters ? 10 : 1;
+            expect(
+              _painter(tester).tickLabel(-12.5),
+              '${((target - 12.5) / factor).toStringAsFixed(digits)} $unit',
+            );
+            expect(
+              _painter(tester).tickLabel(12.5),
+              '${((target + 12.5) / factor).toStringAsFixed(digits)} $unit',
+            );
+          }
+        }
       }
-      expect(_painter(tester).range, 1);
-
-      await _guide(tester, 0.149);
-      for (var packet = 0; packet < 32; packet++) {
-        await tester.pump(const Duration(milliseconds: 20));
-        await _guide(tester, packet.isEven ? 0.151 : 0.149);
-      }
-      expect(_painter(tester).range, 0.4);
-      await _guide(tester, 0.19);
-      await tester.pump(const Duration(milliseconds: 640));
-      expect(_painter(tester).range, 1);
-      await _guide(tester, 0.91);
-      await tester.pump(const Duration(milliseconds: 640));
-      expect(_painter(tester).range, 5);
-    });
-
-    testWidgets('zoom reverses continuously when its destination changes', (
-      tester,
-    ) async {
-      await _guide(tester, 2);
-      await _guide(tester, 0.6);
-      await tester.pump(const Duration(milliseconds: 100));
-      final double before = _painter(tester).range as double;
-      await _guide(tester, 1.2);
-      expect(_painter(tester).range, before);
-      final marker = _painter(tester).actual;
-      expect(marker, isNot(1.2));
-      await tester.pump(const Duration(milliseconds: 120));
-      expect(_painter(tester).range, greaterThan(before));
-      expect(_painter(tester).range, lessThan(5));
-      await tester.pump(const Duration(milliseconds: 520));
-      expect(_painter(tester).range, 5);
     });
 
     testWidgets(
@@ -163,7 +155,7 @@ void main() {
       },
     );
 
-    testWidgets('every mode eases marker packets without restarting zoom', (
+    testWidgets('every mode eases marker packets on the fixed ruler', (
       tester,
     ) async {
       for (final level in ['off', 'light', 'medium', 'unknown']) {
@@ -176,7 +168,7 @@ void main() {
         expect(_painter(tester).actual, allOf(greaterThan(.6), lessThan(2)));
         await tester.pump(const Duration(milliseconds: 600));
         expect(_painter(tester).actual, .6);
-        expect(_painter(tester).range, 1);
+        expect(_painter(tester).range, 12.5);
       }
     });
 
@@ -288,7 +280,7 @@ void main() {
         await _guide(tester, 0.08, smoothing: 'medium');
         await _guide(tester, 0.08, tolerance: 0.1, smoothing: 'medium');
         expect(find.text('En tolerancia'), findsOneWidget);
-        expect(_painter(tester).range, greaterThanOrEqualTo(0.8));
+        expect(_painter(tester).range, 12.5);
         expect(_painter(tester).actual, 0.08);
         await _guide(tester, 0.08, target: 1, smoothing: 'medium');
         expect(find.text('Mover hacia +X'), findsOneWidget);

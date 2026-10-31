@@ -34,7 +34,7 @@ void main() {
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('Calibración'));
     await tester.pump(const Duration(milliseconds: 300));
-    expect(find.text('Un montaje, una referencia'), findsOneWidget);
+    expect(find.text('Calibración de X'), findsOneWidget);
     expect(tester.takeException(), isNull);
     await tester.tap(find.text('Configuración'));
     await tester.pump(const Duration(milliseconds: 300));

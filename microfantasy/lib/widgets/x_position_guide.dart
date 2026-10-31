@@ -27,13 +27,10 @@ class XPositionGuide extends StatefulWidget {
 }
 
 class _XPositionGuideState extends State<XPositionGuide>
-    with TickerProviderStateMixin {
-  late final AnimationController _scaleController;
+    with SingleTickerProviderStateMixin {
   late final AnimationController _markerController;
-  late final Listenable _animations;
-  double _scaleBand = 5;
-  late double _rangeFrom;
-  late double _rangeTo;
+  // The main ruler always spans 25 mm, centered on the corrected target.
+  static const double _mainRangeMm = 12.5;
   double? _actualFrom;
   double? _actualTo;
   bool _showPrecision = false;
@@ -49,39 +46,6 @@ class _XPositionGuideState extends State<XPositionGuide>
       'medium' => const Duration(milliseconds: 220),
       _ => const Duration(milliseconds: 90),
     };
-  }
-
-  double _nextRange() {
-    final double? actual = _finite(widget.actualMm);
-    final double distance = actual != null && widget.targetMm.isFinite
-        ? (actual - widget.targetMm).abs()
-        : double.infinity;
-    // Enter at 0.15 / 0.8 mm, leave at 0.18 / 0.9 mm. Noisy readings near
-    // either entry threshold must not keep reversing an unfinished zoom.
-    final double closeLimit = _scaleBand == 0.2 ? 0.18 : 0.15;
-    final double middleLimit = _scaleBand <= 1 ? 0.9 : 0.8;
-    _scaleBand = distance <= closeLimit
-        ? 0.2
-        : distance <= middleLimit
-        ? 1
-        : 5;
-    final double floor = _validTolerance(widget.toleranceMm)
-        ? widget.toleranceMm * 8
-        : 0;
-    return math.max(_scaleBand, floor.isFinite ? floor : double.maxFinite);
-  }
-
-  double get _visualRange {
-    final double progress = Curves.easeInOutSine.transform(
-      _scaleController.value,
-    );
-    // Interpolate magnification logarithmically, so a 5 → 1 → .4 mm zoom
-    // has an even visual pace instead of accelerating at the very end.
-    if (progress == 1) return _rangeTo;
-    if (progress == 0) return _rangeFrom;
-    return math.exp(
-      math.log(_rangeFrom) * (1 - progress) + math.log(_rangeTo) * progress,
-    );
   }
 
   double? get _visualActual {
@@ -115,15 +79,8 @@ class _XPositionGuideState extends State<XPositionGuide>
   @override
   void initState() {
     super.initState();
-    _rangeFrom = _rangeTo = _nextRange();
     _actualFrom = _actualTo = _finite(widget.actualMm);
-    _scaleController = AnimationController(
-      vsync: this,
-      value: 1,
-      duration: const Duration(milliseconds: 620),
-    );
     _markerController = AnimationController(vsync: this, value: 1);
-    _animations = Listenable.merge([_scaleController, _markerController]);
     _updatePrecision();
   }
 
@@ -141,16 +98,7 @@ class _XPositionGuideState extends State<XPositionGuide>
     final double? next = _finite(widget.actualMm);
     if (oldWidget.targetMm != widget.targetMm ||
         oldWidget.toleranceMm != widget.toleranceMm) {
-      _scaleBand = 5;
       _showPrecision = false;
-    }
-    final double nextRange = _nextRange();
-    // Telemetry can retarget the marker without restarting an ongoing zoom.
-    // Only a new scale destination starts a new scale transition.
-    if (nextRange != _rangeTo) {
-      _rangeFrom = _visualRange;
-      _rangeTo = nextRange;
-      _scaleController.forward(from: 0);
     }
     // Retarget from the currently displayed position, including tolerance
     // crossings. Only the graphic eases: actual labels/success never lag.
@@ -169,7 +117,6 @@ class _XPositionGuideState extends State<XPositionGuide>
 
   @override
   void dispose() {
-    _scaleController.dispose();
     _markerController.dispose();
     super.dispose();
   }
@@ -246,17 +193,9 @@ class _XPositionGuideState extends State<XPositionGuide>
                 ],
               ),
               AnimatedBuilder(
-                animation: _animations,
+                animation: _markerController,
                 builder: (BuildContext context, Widget? child) {
-                  // A tolerance increase must never briefly exaggerate the
-                  // tolerance width while the scale is catching up.
-                  final double floor = validTolerance
-                      ? widget.toleranceMm * 8
-                      : 0;
-                  final double range = math.max(
-                    _visualRange,
-                    floor.isFinite ? floor : double.maxFinite,
-                  );
+                  const range = _mainRangeMm;
                   return Column(
                     children: <Widget>[
                       // Reserve both layers: the main ruler never moves when
@@ -387,7 +326,7 @@ class _XPositionGuideState extends State<XPositionGuide>
                         child: FittedBox(
                           fit: BoxFit.scaleDown,
                           child: Text(
-                            'Escala ±${_length(range, widget.centimeters, compact: true)}'
+                            'Rango fijo ±${_length(range, widget.centimeters, compact: true)}'
                             ' · tolerancia ${validTolerance ? '±${_length(widget.toleranceMm, widget.centimeters, compact: true)}' : '—'}',
                             textAlign: TextAlign.center,
                             style: theme.textTheme.labelSmall?.copyWith(
@@ -529,8 +468,9 @@ class _PositionPainter extends CustomPainter {
     );
 
     if (tolerance > 0) {
-      // Exact tolerance-to-scale ratio; never enforce a decorative minimum width.
-      final double bandHalfWidth = halfWidth * (tolerance / range);
+      // Preserve the true tolerance ratio, clipped to the fixed visible range.
+      final double bandHalfWidth =
+          halfWidth * (tolerance / range).clamp(0.0, 1.0);
       final Rect band = Rect.fromLTRB(
         center - bandHalfWidth,
         bar.top,

@@ -18,14 +18,17 @@ enum LengthUnit {
 
 enum SmoothingLevel { off, light, medium }
 
+// Names are persisted. Keep legacy IDs while updating their displayed palettes.
 enum AppearanceTheme {
+  light,
+  dark,
+  midnight,
   atelier,
   lagoon,
   porcelain,
   amethyst,
   sunstone,
   arctic,
-  midnight,
 }
 
 /// Immutable settings; validation also runs outside debug builds.
@@ -43,7 +46,7 @@ class AppSettings {
     String? activeProfileId,
     bool haptics = true,
     bool autoAdvance = false,
-    AppearanceTheme appearance = AppearanceTheme.atelier,
+    AppearanceTheme appearance = AppearanceTheme.light,
   }) {
     nonEmptyString(host, 'host');
     final Uri? hostUri = Uri.tryParse('http://$host');
@@ -140,7 +143,7 @@ class AppSettings {
         'autoAdvance',
       ),
       appearance: enumValue(
-        valueOrDefault(json, 'appearance', 'atelier'),
+        valueOrDefault(json, 'appearance', 'light'),
         AppearanceTheme.values,
         'appearance',
       ),

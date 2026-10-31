@@ -35,7 +35,7 @@ void main() {
     addTearDown(c.dispose);
     c.settings = c.settings.copyWith(autoAdvance: true);
     await mount(tester, c);
-    expect(find.text('Un montaje, una referencia'), findsOneWidget);
+    expect(find.text('Calibración de X'), findsOneWidget);
     expect(find.byType(DropdownButtonFormField<String>), findsNothing);
     expect(find.text('Guardar calibración'), findsNothing);
     expect(find.text('Nuevo perfil'), findsNothing);

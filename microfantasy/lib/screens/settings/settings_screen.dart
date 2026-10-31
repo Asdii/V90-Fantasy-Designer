@@ -18,8 +18,6 @@ class SettingsScreen extends StatelessWidget {
       key: const PageStorageKey('settings-scroll'),
       padding: const EdgeInsets.all(18),
       children: [
-        Text('A tu manera', style: Theme.of(context).textTheme.titleLarge),
-        const SizedBox(height: 18),
         Section(
           title: 'Máquina',
           children: [
@@ -180,10 +178,6 @@ class SettingsScreen extends StatelessWidget {
         Section(
           title: 'Temas',
           children: [
-            const Text(
-              'Elige el ambiente de tu taller. Seis temas claros y uno nocturno.',
-            ),
-            const SizedBox(height: 14),
             LayoutBuilder(
               builder: (context, constraints) {
                 final twoColumns =
@@ -384,39 +378,20 @@ class _AppearanceCard extends StatelessWidget {
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
     final preview = microTheme(appearance);
-    final (label, description) = switch (appearance) {
-      AppearanceTheme.atelier => (
-        'Atelier',
-        'Marfil cálido y azul tinta para el taller.',
-      ),
-      AppearanceTheme.lagoon => (
-        'Lagoon',
-        'Azules frescos sobre superficies luminosas.',
-      ),
-      AppearanceTheme.porcelain => (
-        'Porcelain',
-        'Porcelana, azul grafito y acentos malva.',
-      ),
-      AppearanceTheme.amethyst => (
-        'Amethyst',
-        'Lavanda luminosa y violeta profundo.',
-      ),
-      AppearanceTheme.sunstone => (
-        'Sunstone',
-        'Arena dorada y ámbar, con detalles azul mineral.',
-      ),
-      AppearanceTheme.arctic => (
-        'Arctic',
-        'Azul cobalto y hielo, con acentos iris.',
-      ),
-      AppearanceTheme.midnight => (
-        'Midnight',
-        'Azul noche, acero y luz celeste. Tema oscuro.',
-      ),
+    final label = switch (appearance) {
+      AppearanceTheme.light => 'Claro',
+      AppearanceTheme.dark => 'Oscuro',
+      AppearanceTheme.midnight => 'Midnight',
+      AppearanceTheme.atelier => 'Solarized Light',
+      AppearanceTheme.lagoon => 'Nord',
+      AppearanceTheme.porcelain => 'Catppuccin Latte',
+      AppearanceTheme.amethyst => 'Dracula',
+      AppearanceTheme.sunstone => 'Gruvbox Light',
+      AppearanceTheme.arctic => 'Nord Light',
     };
     final borderRadius = BorderRadius.circular(12);
     return Semantics(
-      label: '$label. $description',
+      label: label,
       checked: selected,
       inMutuallyExclusiveGroup: true,
       child: Material(
@@ -463,8 +438,6 @@ class _AppearanceCard extends StatelessWidget {
                             ),
                           ],
                         ),
-                        const SizedBox(height: 4),
-                        Text(description, style: theme.textTheme.bodySmall),
                       ],
                     ),
                   ),

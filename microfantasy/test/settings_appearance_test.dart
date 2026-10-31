@@ -15,14 +15,19 @@ double contrast(Color a, Color b) {
 }
 
 void main() {
-  test('all seven appearances have readable surface and button text', () {
-    expect(AppearanceTheme.values, hasLength(7));
+  test('all appearances have readable surface and button text', () {
+    expect(AppearanceTheme.values, hasLength(9));
     for (final appearance in AppearanceTheme.values) {
       final theme = microTheme(appearance);
       final colors = theme.colorScheme;
       expect(
         colors.brightness,
-        appearance == AppearanceTheme.midnight
+        {
+              AppearanceTheme.dark,
+              AppearanceTheme.midnight,
+              AppearanceTheme.lagoon,
+              AppearanceTheme.amethyst,
+            }.contains(appearance)
             ? Brightness.dark
             : Brightness.light,
       );
@@ -40,6 +45,22 @@ void main() {
       }
     }
   });
+
+  test(
+    'Claro and AMOLED Oscuro precede Midnight; dark has pure white controls',
+    () {
+      expect(AppearanceTheme.values.take(3), [
+        AppearanceTheme.light,
+        AppearanceTheme.dark,
+        AppearanceTheme.midnight,
+      ]);
+      final theme = microTheme(AppearanceTheme.dark);
+      expect(theme.scaffoldBackgroundColor, Colors.black);
+      expect(theme.colorScheme.onSurface, Colors.white);
+      expect(theme.colorScheme.primary, Colors.white);
+      expect(theme.colorScheme.onPrimary, Colors.black);
+    },
+  );
 
   testWidgets(
     'settings order and readiness remain simple; themes can be selected',
@@ -84,6 +105,13 @@ void main() {
       expect(find.textContaining('/api/v1'), findsNothing);
       expect(find.text('Copiar dirección'), findsNothing);
       expect(find.text('Opciones avanzadas'), findsOneWidget);
+      expect(find.text('A tu manera'), findsNothing);
+      expect(find.textContaining('Elige el ambiente'), findsNothing);
+      final lightY = tester.getTopLeft(find.text('Claro')).dy;
+      final darkY = tester.getTopLeft(find.text('Oscuro')).dy;
+      final nightY = tester.getTopLeft(find.text('Midnight')).dy;
+      expect(lightY, lessThanOrEqualTo(darkY));
+      expect(darkY, lessThanOrEqualTo(nightY));
       await tester.tap(find.text('Midnight'));
       await tester.pumpAndSettle();
       expect(controller.settings.appearance, AppearanceTheme.midnight);

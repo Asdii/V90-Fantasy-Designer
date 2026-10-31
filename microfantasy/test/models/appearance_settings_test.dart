@@ -6,11 +6,11 @@ import 'package:microfantasy/repositories/settings_repository.dart';
 
 void main() {
   group('appearance settings', () {
-    test('fresh and legacy settings use atelier', () {
-      expect(AppSettings().appearance, AppearanceTheme.atelier);
+    test('fresh and unthemed legacy settings use Claro', () {
+      expect(AppSettings().appearance, AppearanceTheme.light);
       expect(
         AppSettings.fromJson(<String, Object?>{}).appearance,
-        AppearanceTheme.atelier,
+        AppearanceTheme.light,
       );
       final legacy = AppSettings(
         invertX: true,
@@ -18,7 +18,7 @@ void main() {
         units: LengthUnit.cm,
       ).toJson()..remove('appearance');
       final restored = AppSettings.fromJson(legacy);
-      expect(restored.appearance, AppearanceTheme.atelier);
+      expect(restored.appearance, AppearanceTheme.light);
       expect(restored.invertX, isTrue);
       expect(restored.activeProfileId, 'legacy-calibration');
       expect(restored.units, LengthUnit.cm);
@@ -62,7 +62,7 @@ void main() {
         ...original.toJson(),
         'appearance': 'amethyst',
       });
-      expect(original.appearance, AppearanceTheme.atelier);
+      expect(original.appearance, AppearanceTheme.light);
       expect(changed.copyWith().appearance, AppearanceTheme.amethyst);
       expect(
         changed.copyWith(units: LengthUnit.mm).appearance,
@@ -82,7 +82,7 @@ void main() {
       for (final invalid in <Object?>[
         null,
         '',
-        'dark',
+        'dark-unknown',
         'Atelier',
         0,
         false,
@@ -107,7 +107,7 @@ void main() {
       });
       final repository = SettingsRepository(store);
       final restored = await repository.load();
-      expect(restored.appearance, AppearanceTheme.atelier);
+      expect(restored.appearance, AppearanceTheme.light);
       expect(restored.invertX, isTrue);
       await repository.save(
         restored.copyWith(appearance: AppearanceTheme.porcelain),
