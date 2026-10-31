@@ -42,6 +42,47 @@ void main() {
   );
 
   test(
+    'POST uses a fixed UTF-8 length accepted by the ESP32 WebServer',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      final sent = <String, String>{
+        'ssid': 'Wi-Fi taller ñ',
+        'password': ' clave "café" ',
+      };
+      int? contentLength;
+      bool? chunked;
+      Map<String, dynamic>? received;
+      server.listen((request) async {
+        contentLength = request.contentLength;
+        chunked = request.headers.chunkedTransferEncoding;
+        // Arduino-ESP32 2.0.17 only reads POST data using Content-Length.
+        // Dart HttpServer normally accepts chunked bodies, masking this bug.
+        if (contentLength! < 0 || chunked!) {
+          request.response.statusCode = 400;
+        } else {
+          final bytes = await request.fold<List<int>>(
+            <int>[],
+            (all, chunk) => all..addAll(chunk),
+          );
+          received = jsonDecode(utf8.decode(bytes)) as Map<String, dynamic>;
+          request.response.statusCode = 202;
+          request.response.headers.contentType = ContentType.json;
+          request.response.write('{"accepted":true}');
+        }
+        await request.response.close();
+      });
+      final service = HttpMachineProvisioningService(
+        endpoint: Uri.parse('http://127.0.0.1:${server.port}/api/v1/setup'),
+      );
+      await service.configure(sent['ssid']!, sent['password']!);
+      expect(chunked, false);
+      expect(contentLength, utf8.encode(jsonEncode(sent)).length);
+      expect(received, sent);
+    },
+  );
+
+  test(
     'HTTP provisioning sends credentials and confirms device connection',
     () async {
       final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
@@ -98,10 +139,53 @@ void main() {
     );
     await expectLater(
       service.configure('Home', 'test-pass'),
-      throwsA(isA<HttpException>()),
+      throwsA(
+        isA<MachineSetupRequestException>().having(
+          (error) => error.statusCode,
+          'statusCode',
+          307,
+        ),
+      ),
     );
     expect(requests, 1);
   });
+
+  for (final statusCode in [400, 403, 409, 500]) {
+    test(
+      'device rejection $statusCode remains identifiable without credentials',
+      () async {
+        final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+        addTearDown(() => server.close(force: true));
+        server.listen((request) async {
+          await request.drain<void>();
+          request.response.statusCode = statusCode;
+          // Even a misbehaving server must not expose its response in the UI.
+          request.response.write('echoed-password-from-server');
+          await request.response.close();
+        });
+        final service = HttpMachineProvisioningService(
+          endpoint: Uri.parse('http://127.0.0.1:${server.port}/api/v1/setup'),
+        );
+        await expectLater(
+          service.configure('Home', 'test-pass'),
+          throwsA(
+            isA<MachineSetupRequestException>()
+                .having((error) => error.statusCode, 'statusCode', statusCode)
+                .having(
+                  (error) => error.message,
+                  'message',
+                  isNot(contains('echoed-password')),
+                )
+                .having(
+                  (error) => error.toString(),
+                  'description',
+                  isNot(contains('test-pass')),
+                ),
+          ),
+        );
+      },
+    );
+  }
 
   test('Malformed status is rejected', () {
     expect(

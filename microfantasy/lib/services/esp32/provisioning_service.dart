@@ -48,6 +48,27 @@ abstract interface class MachineProvisioningService {
   Future<void> configure(String ssid, String password);
 }
 
+/// A device rejection is distinct from losing the Wi-Fi connection.
+/// Never include the credential payload or an untrusted response body in errors.
+class MachineSetupRequestException implements Exception {
+  const MachineSetupRequestException(this.statusCode);
+  final int statusCode;
+
+  String get message => switch (statusCode) {
+    400 =>
+      'La máquina rechazó los datos Wi-Fi. Revisa el nombre y la contraseña.',
+    403 =>
+      'La configuración solo está disponible en la red MicroFantasy-…. Conéctate a esa red y vuelve a comprobar.',
+    409 =>
+      'La máquina ya está intentando conectarse. Espera unos segundos y vuelve a comprobar.',
+    _ =>
+      'La máquina rechazó la solicitud (HTTP $statusCode). Vuelve a intentar.',
+  };
+
+  @override
+  String toString() => 'MachineSetupRequestException($statusCode): $message';
+}
+
 String setupPayload(String ssid, String password) {
   final name = utf8.encode(ssid);
   final key = utf8.encode(password);

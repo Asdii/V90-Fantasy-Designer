@@ -182,6 +182,28 @@ Requiere construir el servicio con `allowZeroX: true` y llamar explícitamente a
 
 Para conectar hardware: implementa ese WebSocket en el firmware, anuncia el servicio mDNS o introduce IP y puerto, y desactiva Simulación. `MockEsp32Service` y `WebSocketEsp32Service` implementan el mismo contrato.
 
+### Configuración del Wi-Fi de casa
+
+En **Configuración → Máquina → Configurar Wi-Fi de la máquina**, conecta el
+teléfono a `MicroFantasy-…` (contraseña `fantasy123`) y comprueba la conexión.
+Envía el nombre y contraseña del Wi-Fi doméstico de 2.4 GHz. El ESP32 guarda
+las credenciales en NVS únicamente cuando la conexión funciona; permanecen
+guardadas después de apagarlo. Espera la confirmación y vuelve al Wi-Fi de casa.
+
+La petición usa JSON UTF-8 con `Content-Length` en bytes explícito. El
+[WebServer de Arduino-ESP32 2.0.17](https://github.com/espressif/arduino-esp32/blob/2.0.17/libraries/WebServer/src/Parsing.cpp)
+necesita esa longitud para leer el cuerpo y no decodifica peticiones chunked.
+Sin establecerla, [HttpClientRequest](https://api.dart.dev/dart-io/HttpClientRequest/contentLength.html)
+usa longitud desconocida, y la versión anterior de la app podía comprobar la
+máquina pero fallar al enviar las credenciales. Se corrige actualizando la app;
+no requiere cambiar el firmware ni borrar la memoria del ESP32.
+
+Los rechazos HTTP 400 (datos), 403 (fuera de la red de configuración) y 409
+(intento en curso) se distinguen de los fallos de transporte. La confirmación
+final sigue dependiendo del estado enviado por el firmware; un `storage_error`
+no se presenta como guardado correcto. Las contraseñas no aparecen en los
+mensajes de error ni se envían a una dirección de redirección.
+
 ## Arquitectura
 
 - `lib/models/`: trabajos, pasos, preview, perfiles, preferencias y progreso.

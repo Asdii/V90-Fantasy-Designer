@@ -21,6 +21,8 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
   Future<void> check() async {
     setState(() {
       busy = true;
+      found = false;
+      connectedIp = null;
       message = '';
     });
     try {
@@ -32,6 +34,8 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
             'Máquina encontrada. Introduce el Wi-Fi de tu casa (2.4 GHz).';
         if (status.connected) connectedIp = status.ip;
       });
+    } on MachineSetupRequestException catch (error) {
+      if (mounted) setState(() => message = error.message);
     } catch (_) {
       if (mounted) {
         setState(
@@ -91,6 +95,8 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
               'No se pudo confirmar la conexión. Vuelve a comprobar la máquina; si ya volvió a la red de casa, usa Buscar máquina.',
         );
       }
+    } on MachineSetupRequestException catch (error) {
+      if (mounted) setState(() => message = error.message);
     } catch (_) {
       if (mounted) {
         setState(

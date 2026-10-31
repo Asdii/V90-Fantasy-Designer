@@ -18,14 +18,17 @@ class HttpMachineProvisioningService implements MachineProvisioningService {
         request.followRedirects =
             false; // Never forward home credentials elsewhere.
         if (body != null) {
+          // Arduino-ESP32 2.0.17 WebServer reads bodies by Content-Length;
+          // it does not decode Dart's default chunked request encoding.
+          // Count UTF-8 bytes, not characters, for SSIDs/passwords with accents.
+          final payload = utf8.encode(body);
           request.headers.contentType = ContentType.json;
-          request.write(body);
+          request.contentLength = payload.length;
+          request.add(payload);
         }
         final response = await request.close();
         if (response.statusCode != (method == 'POST' ? 202 : 200)) {
-          throw const HttpException(
-            'La máquina no aceptó la configuración. Revisa la conexión y vuelve a intentar.',
-          );
+          throw MachineSetupRequestException(response.statusCode);
         }
         final bytes = <int>[];
         await for (final chunk in response) {
