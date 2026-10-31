@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../app/app_controller.dart';
+import '../../app/theme.dart';
 import '../../models/app_settings.dart';
 import '../../widgets/common.dart';
 import '../../widgets/app_updates.dart';
@@ -15,21 +16,52 @@ class SettingsScreen extends StatelessWidget {
     final c = controller;
     final s = c.settings;
     return ListView(
+      key: const PageStorageKey('settings-scroll'),
       padding: const EdgeInsets.all(18),
       children: [
         Text('A tu manera', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 18),
+        Section(
+          title: 'Apariencia',
+          children: [
+            const Text('Cuatro temas claros para tu espacio de trabajo.'),
+            const SizedBox(height: 14),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final twoColumns =
+                    constraints.maxWidth >= 600 &&
+                    MediaQuery.textScalerOf(context).scale(16) <= 20;
+                final width = twoColumns
+                    ? (constraints.maxWidth - 10) / 2
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final appearance in AppearanceTheme.values)
+                      SizedBox(
+                        width: width,
+                        child: _AppearanceCard(
+                          key: ValueKey(appearance),
+                          appearance: appearance,
+                          selected: s.appearance == appearance,
+                          onTap: () => c.updateSettings(
+                            c.settings.copyWith(appearance: appearance),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
         AppUpdatesCard(controller: c.updates),
         const SizedBox(height: 14),
         Section(
           title: 'Máquina',
           children: [
-            SwitchListTile.adaptive(
-              contentPadding: EdgeInsets.zero,
-              title: const Text('Modo simulación'),
-              value: s.simulation,
-              onChanged: (v) => c.updateSettings(s.copyWith(simulation: v)),
-            ),
             Text(c.connectionLabel),
             const SizedBox(height: 12),
             ListTile(
@@ -88,51 +120,65 @@ class SettingsScreen extends StatelessWidget {
         Section(
           title: 'V90 Fantasy Designer',
           children: [
-            Text(c.receiverLabel),
-            const SizedBox(height: 12),
-            SwitchListTile.adaptive(
+            ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('Recibir por Wi-Fi'),
-              value: c.receiving,
-              onChanged: c.receiverSupported ? c.toggleReceiver : null,
+              leading: Icon(c.receiving ? Icons.wifi : Icons.wifi_off),
+              title: Text(
+                c.receiverSupported
+                    ? c.receiverLabel
+                    : 'Recepción por Wi-Fi no disponible en este entorno',
+              ),
             ),
-            if (c.receiving) ...[
-              SelectableText(c.receiverAddress),
-              const SizedBox(height: 6),
+            if (c.receiverSupported) ...[
               const Text(
-                'Sin código de enlace. Usa Buscar teléfono en V90 o introduce esta dirección.',
+                'Recepción automática mientras la app está abierta. '
+                'Conecta ambos dispositivos a la misma red Wi-Fi.',
               ),
-              TextButton.icon(
-                onPressed: () =>
-                    Clipboard.setData(ClipboardData(text: c.receiverAddress)),
-                icon: const Icon(Icons.copy_outlined),
-                label: const Text('Copiar dirección'),
+              const SizedBox(height: 12),
+              SelectableText(
+                c.receiverAddress,
+                key: const PageStorageKey('receiver-address'),
+                style: Theme.of(context).textTheme.bodyMedium,
               ),
+              if (c.receiving && c.designer.endpoints.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                const Text(
+                  'Usa Buscar teléfono en V90 o introduce esta dirección. '
+                  'No necesitas un código de enlace.',
+                ),
+                TextButton.icon(
+                  onPressed: () async {
+                    await Clipboard.setData(
+                      ClipboardData(text: c.receiverAddress),
+                    );
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Dirección copiada')),
+                    );
+                  },
+                  icon: const Icon(Icons.copy_outlined),
+                  label: const Text('Copiar dirección'),
+                ),
+              ],
+              if (!c.receiving) ...[
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: c.busy ? null : c.ensureReceiver,
+                  icon: const Icon(Icons.refresh),
+                  label: const Text('Reintentar recepción'),
+                ),
+              ],
             ],
-            OutlinedButton.icon(
-              onPressed: c.importJob,
-              icon: const Icon(Icons.file_open_outlined),
-              label: const Text('Importar archivo JSON'),
-            ),
           ],
         ),
         const SizedBox(height: 14),
         Section(
           title: 'Preferencias',
           children: [
-            const ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: Icon(Icons.light_mode_outlined),
-              title: Text('Apariencia clara'),
-            ),
             _choice<LengthUnit>('Unidad', s.units, {
               LengthUnit.mm: 'Milímetros',
               LengthUnit.cm: 'Centímetros',
             }, (v) => c.updateSettings(s.copyWith(units: v))),
-            _choice<bool>('Dirección X', s.invertX, {
-              false: 'Normal',
-              true: 'Invertida',
-            }, (v) => c.updateSettings(s.copyWith(invertX: v))),
             _choice<SmoothingLevel>('Suavizado visual', s.smoothing, {
               SmoothingLevel.off: 'Desactivado',
               SmoothingLevel.light: 'Suave',
@@ -155,6 +201,7 @@ class SettingsScreen extends StatelessWidget {
             ),
             Wrap(
               spacing: 8,
+              runSpacing: 8,
               children: [.02, .05, .10]
                   .map(
                     (v) => ChoiceChip(
@@ -186,9 +233,6 @@ class SettingsScreen extends StatelessWidget {
               },
               child: const Text('Intervalo personalizado'),
             ),
-            _choice<String>('Perfil activo', c.profile.id, {
-              for (final p in c.profiles) p.id: p.name,
-            }, c.selectProfile),
             SwitchListTile.adaptive(
               contentPadding: EdgeInsets.zero,
               title: const Text('Vibrar al centrar'),
@@ -209,13 +253,21 @@ class SettingsScreen extends StatelessWidget {
           children: [
             _action(
               Icons.download_outlined,
-              'Exportar calibraciones',
+              'Exportar calibración',
               c.exportCalibrations,
             ),
             _action(
               Icons.upload_file_outlined,
-              'Importar calibraciones',
-              c.importCalibrations,
+              'Importar calibración',
+              () async {
+                if (await confirm(
+                  context,
+                  'Importar calibración',
+                  'La calibración importada reemplazará la calibración actual.',
+                )) {
+                  await c.importCalibrations();
+                }
+              },
             ),
             _action(
               Icons.polyline_outlined,
@@ -226,7 +278,7 @@ class SettingsScreen extends StatelessWidget {
               if (await confirm(
                 context,
                 'Borrar trabajo actual',
-                'Los perfiles de calibración se conservarán.',
+                'La calibración se conservará.',
               )) {
                 c.clearJob();
               }
@@ -235,7 +287,7 @@ class SettingsScreen extends StatelessWidget {
               if (await confirm(
                 context,
                 'Restaurar configuración',
-                'Se conservarán trabajos y calibraciones.',
+                'Se conservarán los trabajos y la calibración.',
               )) {
                 c.resetSettings();
               }
@@ -244,9 +296,18 @@ class SettingsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         ExpansionTile(
+          key: const PageStorageKey('advanced-settings'),
           title: const Text('Opciones avanzadas'),
           children: [
+            SwitchListTile.adaptive(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Modo simulación'),
+              subtitle: const Text('Prueba la app sin conectar la máquina.'),
+              value: s.simulation,
+              onChanged: (v) => c.updateSettings(s.copyWith(simulation: v)),
+            ),
             ListTile(
+              contentPadding: EdgeInsets.zero,
               title: const Text('Puerto WebSocket'),
               subtitle: Text('${s.port}'),
               onTap: () async {
@@ -260,6 +321,7 @@ class SettingsScreen extends StatelessWidget {
               },
             ),
             ListTile(
+              contentPadding: EdgeInsets.zero,
               title: const Text('Timeout'),
               subtitle: Text('${s.timeoutSeconds} segundos'),
               onTap: () async {
@@ -297,6 +359,9 @@ class SettingsScreen extends StatelessWidget {
             ],
             SelectableText(
               c.diagnostics,
+              // SelectableText owns a scroll position; do not reuse the tile's
+              // PageStorage entry, which stores a bool instead of an offset.
+              key: const PageStorageKey('settings-diagnostics'),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ],
@@ -332,4 +397,173 @@ class SettingsScreen extends StatelessWidget {
       },
     ),
   );
+}
+
+class _AppearanceCard extends StatelessWidget {
+  const _AppearanceCard({
+    super.key,
+    required this.appearance,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final AppearanceTheme appearance;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final preview = microTheme(appearance);
+    final (label, description) = switch (appearance) {
+      AppearanceTheme.atelier => (
+        'Atelier',
+        'Marfil cálido y azul tinta para el taller.',
+      ),
+      AppearanceTheme.lagoon => (
+        'Lagoon',
+        'Azules frescos sobre superficies luminosas.',
+      ),
+      AppearanceTheme.porcelain => (
+        'Porcelain',
+        'Blanco suave y grafito, con acentos discretos.',
+      ),
+      AppearanceTheme.amethyst => (
+        'Amethyst',
+        'Lavanda tenue y detalles violeta.',
+      ),
+    };
+    final borderRadius = BorderRadius.circular(12);
+    return Semantics(
+      label: '$label. $description',
+      checked: selected,
+      inMutuallyExclusiveGroup: true,
+      child: Material(
+        color: selected ? colors.primaryContainer : colors.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: borderRadius,
+          side: BorderSide(
+            color: selected ? colors.primary : colors.outlineVariant,
+            width: selected ? 2 : 1,
+          ),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          borderRadius: borderRadius,
+          onTap: onTap,
+          child: ExcludeSemantics(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Row(
+                children: [
+                  _AppearancePreview(theme: preview),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                label,
+                                style: theme.textTheme.titleMedium,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Icon(
+                              selected
+                                  ? Icons.radio_button_checked
+                                  : Icons.radio_button_unchecked,
+                              color: selected
+                                  ? colors.primary
+                                  : colors.onSurfaceVariant,
+                              size: 20,
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(description, style: theme.textTheme.bodySmall),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A miniature surface and controls, using the same palette as the live theme.
+class _AppearancePreview extends StatelessWidget {
+  const _AppearancePreview({required this.theme});
+  final ThemeData theme;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = theme.colorScheme;
+    return Container(
+      width: 52,
+      height: 68,
+      padding: const EdgeInsets.all(7),
+      decoration: BoxDecoration(
+        color: theme.scaffoldBackgroundColor,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Container(
+              width: 20,
+              height: 4,
+              decoration: BoxDecoration(
+                color: colors.onSurface,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Expanded(
+            child: Container(
+              decoration: BoxDecoration(
+                color: colors.surface,
+                borderRadius: BorderRadius.circular(4),
+                border: Border.all(color: colors.outlineVariant),
+              ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: colors.primary,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 4),
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  color: colors.secondary,
+                  shape: BoxShape.circle,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 }

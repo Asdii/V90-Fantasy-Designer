@@ -46,7 +46,10 @@ void main() {
     'opening a transferred helper restores its initial view and persists later progress',
     () async {
       final store = MemoryStore();
-      final c = AppController(store: store, designer: LocalReceiverService());
+      final c = AppController(
+        store: store,
+        designer: LocalReceiverService(port: 0, bindAddress: '127.0.0.1'),
+      );
       await c.initialize();
       await c.receiveJob(CuttingJob.fromJson(fixture()));
       c.acceptPending();
@@ -60,7 +63,7 @@ void main() {
       c.dispose();
       final restored = AppController(
         store: store,
-        designer: LocalReceiverService(),
+        designer: LocalReceiverService(port: 0, bindAddress: '127.0.0.1'),
       );
       await restored.initialize();
       expect(restored.stepIndex, 1);
@@ -84,7 +87,7 @@ void main() {
       await tester.runAsync(() async {
         c = AppController(
           store: MemoryStore(),
-          designer: LocalReceiverService(),
+          designer: LocalReceiverService(port: 0, bindAddress: '127.0.0.1'),
         );
         await c.initialize();
         await c.receiveJob(CuttingJob.fromJson(fixture()));

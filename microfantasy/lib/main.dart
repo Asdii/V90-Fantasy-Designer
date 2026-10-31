@@ -2,6 +2,8 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'app/app_controller.dart';
 import 'app/theme.dart';
+import 'models/app_settings.dart';
+import 'widgets/microfantasy_mark.dart';
 import 'repositories/shared_preferences_store.dart';
 import 'screens/cut/cut_screen.dart';
 import 'screens/calibration/calibration_screen.dart';
@@ -35,6 +37,7 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
   final _messenger = GlobalKey<ScaffoldMessengerState>();
   int _tab = 0;
   int _lastNotice = 0;
+  AppearanceTheme? _appearance;
   @override
   void initState() {
     super.initState();
@@ -45,6 +48,9 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
 
   void _onChange() {
     final c = widget.controller;
+    if (_appearance != c.settings.appearance) {
+      setState(() => _appearance = c.settings.appearance);
+    }
     if (c.noticeId != _lastNotice && c.notice != null) {
       _lastNotice = c.noticeId;
       final text = c.notice!;
@@ -81,7 +87,7 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
   Widget build(BuildContext context) => MaterialApp(
     title: 'MicroFantasy',
     debugShowCheckedModeBanner: false,
-    theme: microTheme(),
+    theme: microTheme(widget.controller.settings.appearance),
     scaffoldMessengerKey: _messenger,
     home: ListenableBuilder(
       listenable: widget.controller,
@@ -98,27 +104,25 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                       padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
                       child: Row(
                         children: [
-                          Container(
-                            padding: const EdgeInsets.all(9),
-                            decoration: BoxDecoration(
-                              color: const Color(0xffe0f2fa),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Icon(
-                              Icons.diamond_outlined,
-                              color: blue,
-                              size: 25,
-                            ),
-                          ),
-                          const SizedBox(width: 10),
-                          const Expanded(
-                            child: Text(
-                              'MicroFantasy',
-                              style: TextStyle(
-                                fontSize: 22,
-                                fontWeight: FontWeight.w600,
-                                color: ink,
-                              ),
+                          const MicroFantasyMark(),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'MicroFantasy',
+                                  style: Theme.of(context).textTheme.titleLarge
+                                      ?.copyWith(
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: -.6,
+                                      ),
+                                ),
+                                Text(
+                                  'Guía de corte manual',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
                             ),
                           ),
                           if (c.ready)
@@ -131,7 +135,7 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                                     ? Icons.wifi
                                     : Icons.wifi_off,
                                 size: 21,
-                                color: blue,
+                                color: Theme.of(context).colorScheme.primary,
                               ),
                             ),
                         ],
@@ -142,7 +146,9 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: const Color(0xffe8eff4),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.surfaceContainerHigh,
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Row(
@@ -158,7 +164,7 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                                   button: true,
                                   child: Material(
                                     color: _tab == entry.key
-                                        ? Colors.white
+                                        ? Theme.of(context).colorScheme.surface
                                         : Colors.transparent,
                                     borderRadius: BorderRadius.circular(8),
                                     child: InkWell(
@@ -177,8 +183,12 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
                                             color: _tab == entry.key
-                                                ? blue
-                                                : ink,
+                                                ? Theme.of(
+                                                    context,
+                                                  ).colorScheme.primary
+                                                : Theme.of(context)
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
                                           ),
                                         ),
                                       ),
@@ -196,7 +206,7 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                         margin: const EdgeInsets.fromLTRB(18, 12, 18, 0),
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          color: const Color(0xffe1f3fb),
+                          color: Theme.of(context).colorScheme.primaryContainer,
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Column(

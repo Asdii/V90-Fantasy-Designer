@@ -27,12 +27,16 @@ class XPositionGuide extends StatefulWidget {
 }
 
 class _XPositionGuideState extends State<XPositionGuide>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
+    with TickerProviderStateMixin {
+  late final AnimationController _scaleController;
+  late final AnimationController _markerController;
+  late final Listenable _animations;
+  double _scaleBand = 5;
   late double _rangeFrom;
   late double _rangeTo;
   double? _actualFrom;
   double? _actualTo;
+  bool _showPrecision = false;
 
   static double? _finite(double? value) =>
       value != null && value.isFinite ? value : null;
@@ -47,28 +51,61 @@ class _XPositionGuideState extends State<XPositionGuide>
     };
   }
 
-  static double _range(XPositionGuide guide) {
-    final double? actual = _finite(guide.actualMm);
-    final double distance = actual != null && guide.targetMm.isFinite
-        ? (actual - guide.targetMm).abs()
+  double _nextRange() {
+    final double? actual = _finite(widget.actualMm);
+    final double distance = actual != null && widget.targetMm.isFinite
+        ? (actual - widget.targetMm).abs()
         : double.infinity;
-    final double band = distance <= 0.15 ? 0.2 : (distance <= 0.8 ? 1.0 : 5.0);
-    final double floor = _validTolerance(guide.toleranceMm)
-        ? guide.toleranceMm * 8
+    // Enter at 0.15 / 0.8 mm, leave at 0.18 / 0.9 mm. Noisy readings near
+    // either entry threshold must not keep reversing an unfinished zoom.
+    final double closeLimit = _scaleBand == 0.2 ? 0.18 : 0.15;
+    final double middleLimit = _scaleBand <= 1 ? 0.9 : 0.8;
+    _scaleBand = distance <= closeLimit
+        ? 0.2
+        : distance <= middleLimit
+        ? 1
+        : 5;
+    final double floor = _validTolerance(widget.toleranceMm)
+        ? widget.toleranceMm * 8
         : 0;
-    return math.max(band, floor.isFinite ? floor : double.maxFinite);
+    return math.max(_scaleBand, floor.isFinite ? floor : double.maxFinite);
   }
 
-  double get _progress => Curves.easeOutCubic.transform(_controller.value);
-
-  double get _visualRange =>
-      _rangeFrom * (1 - _progress) + _rangeTo * _progress;
+  double get _visualRange {
+    final double progress = Curves.easeInOutCubic.transform(
+      _scaleController.value,
+    );
+    return _rangeFrom * (1 - progress) + _rangeTo * progress;
+  }
 
   double? get _visualActual {
     final double? start = _actualFrom;
     final double? end = _actualTo;
     if (start == null || end == null) return end;
-    return start * (1 - _progress) + end * _progress;
+    final double progress = Curves.easeOutCubic.transform(
+      _markerController.value,
+    );
+    final double visual = start * (1 - progress) + end * progress;
+    // Even rounding at a boundary must not place an outside reading in the band.
+    return _zone(visual) == _zone(end) ? visual : end;
+  }
+
+  double get _precisionRange {
+    final double range = _validTolerance(widget.toleranceMm)
+        ? math.max(0.05, widget.toleranceMm * 2)
+        : 0.05;
+    return range.isFinite ? range : double.maxFinite;
+  }
+
+  void _updatePrecision() {
+    final double? actual = _finite(widget.actualMm);
+    // A small exit margin avoids flicker around the inset's visibility threshold.
+    final double threshold = _precisionRange * (_showPrecision ? 1.25 : 1);
+    _showPrecision =
+        actual != null &&
+        widget.targetMm.isFinite &&
+        _validTolerance(widget.toleranceMm) &&
+        (actual - widget.targetMm).abs() <= threshold;
   }
 
   int _zone(double value) {
@@ -80,9 +117,16 @@ class _XPositionGuideState extends State<XPositionGuide>
   @override
   void initState() {
     super.initState();
-    _rangeFrom = _rangeTo = _range(widget);
+    _rangeFrom = _rangeTo = _nextRange();
     _actualFrom = _actualTo = _finite(widget.actualMm);
-    _controller = AnimationController(vsync: this, value: 1);
+    _scaleController = AnimationController(
+      vsync: this,
+      value: 1,
+      duration: const Duration(milliseconds: 240),
+    );
+    _markerController = AnimationController(vsync: this, value: 1);
+    _animations = Listenable.merge([_scaleController, _markerController]);
+    _updatePrecision();
   }
 
   @override
@@ -97,9 +141,20 @@ class _XPositionGuideState extends State<XPositionGuide>
 
     final double? previous = _visualActual;
     final double? next = _finite(widget.actualMm);
-    _rangeFrom = _visualRange;
-    _rangeTo = _range(widget);
-    // Never animate across a tolerance boundary: crossing the green band must
+    if (oldWidget.targetMm != widget.targetMm ||
+        oldWidget.toleranceMm != widget.toleranceMm) {
+      _scaleBand = 5;
+      _showPrecision = false;
+    }
+    final double nextRange = _nextRange();
+    // Telemetry can retarget the marker without restarting an ongoing zoom.
+    // Only a new scale destination starts a new scale transition.
+    if (nextRange != _rangeTo) {
+      _rangeFrom = _visualRange;
+      _rangeTo = nextRange;
+      _scaleController.forward(from: 0);
+    }
+    // Never animate across a tolerance boundary: crossing the band must
     // reflect the raw sensor, including opposite-side jumps and disconnection.
     final bool sameZone =
         previous != null &&
@@ -114,28 +169,31 @@ class _XPositionGuideState extends State<XPositionGuide>
         ? previous
         : next;
     _actualTo = next;
-    _controller.stop();
-    final Duration duration = smoothingDuration != Duration.zero
-        ? smoothingDuration
-        : _rangeFrom != _rangeTo
-        ? const Duration(milliseconds: 180)
-        : Duration.zero;
-    if (duration == Duration.zero) {
-      _controller.value = 1;
+    _markerController.stop();
+    if (_actualFrom == _actualTo) {
+      _markerController.value = 1;
     } else {
-      _controller.duration = duration;
-      _controller.forward(from: 0);
+      _markerController.duration = smoothingDuration;
+      _markerController.forward(from: 0);
     }
+    _updatePrecision();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _scaleController.dispose();
+    _markerController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final ThemeData theme = Theme.of(context);
+    final ColorScheme colors = theme.colorScheme;
+    // Green has a measurement meaning and stays independent of the accent hue.
+    final Color successColor = colors.brightness == Brightness.dark
+        ? const Color(0xFF7CD9A6)
+        : const Color(0xFF227A50);
     final double? actual = _finite(widget.actualMm);
     final bool validTarget = widget.targetMm.isFinite;
     final bool validTolerance = _validTolerance(widget.toleranceMm);
@@ -157,9 +215,7 @@ class _XPositionGuideState extends State<XPositionGuide>
     final String targetLabel = validTarget
         ? _length(widget.targetMm, widget.centimeters)
         : '—';
-    final Color statusColor = arrived
-        ? const Color(0xFF227A50)
-        : const Color(0xFF17334B);
+    final Color statusColor = arrived ? successColor : colors.onSurfaceVariant;
 
     return Semantics(
       container: true,
@@ -167,8 +223,11 @@ class _XPositionGuideState extends State<XPositionGuide>
       label: 'Posición X. Actual $actualLabel. Objetivo $targetLabel. $status.',
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: const Color(0xFFF6FAFC),
-          borderRadius: BorderRadius.circular(10),
+          color: colors.surface,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: colors.outlineVariant.withValues(alpha: 0.6),
+          ),
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
@@ -180,19 +239,29 @@ class _XPositionGuideState extends State<XPositionGuide>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Expanded(
-                    child: _reading('Actual', actualLabel, TextAlign.left),
+                    child: _reading(
+                      theme,
+                      'Actual',
+                      actualLabel,
+                      TextAlign.left,
+                    ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
-                    child: _reading('Objetivo', targetLabel, TextAlign.right),
+                    child: _reading(
+                      theme,
+                      'Objetivo',
+                      targetLabel,
+                      TextAlign.right,
+                    ),
                   ),
                 ],
               ),
               AnimatedBuilder(
-                animation: _controller,
+                animation: _animations,
                 builder: (BuildContext context, Widget? child) {
                   // A tolerance increase must never briefly exaggerate the
-                  // green width while the scale is catching up.
+                  // tolerance width while the scale is catching up.
                   final double floor = validTolerance
                       ? widget.toleranceMm * 8
                       : 0;
@@ -202,16 +271,79 @@ class _XPositionGuideState extends State<XPositionGuide>
                   );
                   return Column(
                     children: <Widget>[
+                      // Keep this slot even when hidden so the main bar never
+                      // moves as a measurement enters or leaves the detail view.
                       SizedBox(
-                        height: 100,
+                        height:
+                            92 +
+                            math.max(
+                              0,
+                              MediaQuery.textScalerOf(context).scale(11) - 11,
+                            ),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+                          child: AnimatedOpacity(
+                            opacity: _showPrecision ? 1 : 0,
+                            duration: const Duration(milliseconds: 180),
+                            curve: Curves.easeOut,
+                            child: DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: colors.surfaceContainerLow,
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Column(
+                                children: <Widget>[
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    'Detalle · ±${_length(_precisionRange, widget.centimeters, compact: true)}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: theme.textTheme.labelSmall?.copyWith(
+                                      color: colors.onSurfaceVariant,
+                                    ),
+                                  ),
+                                  Expanded(
+                                    child: CustomPaint(
+                                      key: const ValueKey('x-precision-bar'),
+                                      size: const Size(
+                                        double.infinity,
+                                        double.infinity,
+                                      ),
+                                      painter: _PositionPainter(
+                                        actual: ready ? _visualActual : null,
+                                        target: validTarget
+                                            ? widget.targetMm
+                                            : 0,
+                                        tolerance: validTolerance
+                                            ? widget.toleranceMm
+                                            : 0,
+                                        range: _precisionRange,
+                                        centimeters: widget.centimeters,
+                                        colors: colors,
+                                        successColor: successColor,
+                                        precision: true,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                      SizedBox(
+                        height: 88,
                         width: double.infinity,
                         child: CustomPaint(
+                          key: const ValueKey('x-position-bar'),
                           painter: _PositionPainter(
                             actual: ready ? _visualActual : null,
                             target: validTarget ? widget.targetMm : 0,
                             tolerance: validTolerance ? widget.toleranceMm : 0,
                             range: range,
                             centimeters: widget.centimeters,
+                            colors: colors,
+                            successColor: successColor,
                           ),
                         ),
                       ),
@@ -219,9 +351,8 @@ class _XPositionGuideState extends State<XPositionGuide>
                         'Escala ±${_length(range, widget.centimeters, compact: true)}'
                         ' · tolerancia ${validTolerance ? '±${_length(widget.toleranceMm, widget.centimeters, compact: true)}' : '—'}',
                         textAlign: TextAlign.center,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF62798C),
+                        style: theme.textTheme.labelSmall?.copyWith(
+                          color: colors.onSurfaceVariant,
                         ),
                       ),
                     ],
@@ -261,7 +392,12 @@ class _XPositionGuideState extends State<XPositionGuide>
     );
   }
 
-  Widget _reading(String label, String value, TextAlign alignment) {
+  Widget _reading(
+    ThemeData theme,
+    String label,
+    String value,
+    TextAlign alignment,
+  ) {
     return Column(
       crossAxisAlignment: alignment == TextAlign.left
           ? CrossAxisAlignment.start
@@ -269,16 +405,24 @@ class _XPositionGuideState extends State<XPositionGuide>
       children: <Widget>[
         Text(
           label,
-          style: const TextStyle(fontSize: 12, color: Color(0xFF62798C)),
+          style: theme.textTheme.labelMedium?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
         ),
         const SizedBox(height: 3),
-        Text(
-          value,
-          textAlign: alignment,
-          style: const TextStyle(
-            color: Color(0xFF17334B),
-            fontSize: 21,
-            fontWeight: FontWeight.w600,
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          alignment: alignment == TextAlign.left
+              ? Alignment.centerLeft
+              : Alignment.centerRight,
+          child: Text(
+            value,
+            textAlign: alignment,
+            style: theme.textTheme.titleLarge?.copyWith(
+              color: theme.colorScheme.onSurface,
+              fontWeight: FontWeight.w600,
+              fontFeatures: const [FontFeature.tabularFigures()],
+            ),
           ),
         ),
       ],
@@ -304,6 +448,9 @@ class _PositionPainter extends CustomPainter {
     required this.tolerance,
     required this.range,
     required this.centimeters,
+    required this.colors,
+    required this.successColor,
+    this.precision = false,
   });
 
   final double? actual;
@@ -311,30 +458,37 @@ class _PositionPainter extends CustomPainter {
   final double tolerance;
   final double range;
   final bool centimeters;
+  final ColorScheme colors;
+  final Color successColor;
+  final bool precision;
 
   @override
   void paint(Canvas canvas, Size size) {
-    if (size.width < 32 || size.height < 70) return;
+    if (size.width < 32 || size.height < (precision ? 36 : 70)) return;
     final double inset = math.min(36, size.width * 0.12);
     final double left = inset;
     final double right = size.width - inset;
     final double center = size.width / 2;
     final double halfWidth = (right - left) / 2;
-    const double y = 41;
-    final Rect bar = Rect.fromLTRB(left, y - 5, right, y + 5);
+    final double y = precision ? 20 : 34;
+    final double thickness = precision ? 3 : 5;
+    final Rect bar = Rect.fromLTRB(left, y - thickness, right, y + thickness);
     final RRect roundedBar = RRect.fromRectAndRadius(
       bar,
       const Radius.circular(5),
     );
-    canvas.drawRRect(roundedBar, Paint()..color = const Color(0xFFD6DFE5));
+    canvas.drawRRect(
+      roundedBar,
+      Paint()..color = colors.surfaceContainerHighest,
+    );
 
     if (actual != null && tolerance > 0) {
       // Exact tolerance-to-scale ratio; never enforce a decorative minimum width.
-      final double greenHalfWidth = halfWidth * (tolerance / range);
+      final double bandHalfWidth = halfWidth * (tolerance / range);
       final Rect band = Rect.fromLTRB(
-        center - greenHalfWidth,
+        center - bandHalfWidth,
         bar.top,
-        center + greenHalfWidth,
+        center + bandHalfWidth,
         bar.bottom,
       );
       canvas.save();
@@ -342,13 +496,17 @@ class _PositionPainter extends CustomPainter {
       canvas.drawRect(
         band,
         Paint()
-          ..shader = const LinearGradient(
+          ..shader = LinearGradient(
             colors: <Color>[
-              Color(0x0039A96B),
-              Color(0xFF54B980),
-              Color(0x0039A96B),
+              successColor.withValues(alpha: 0),
+              successColor.withValues(alpha: 0.35),
+              colors.brightness == Brightness.dark
+                  ? successColor
+                  : const Color(0xFF54B980),
+              successColor.withValues(alpha: 0.35),
+              successColor.withValues(alpha: 0),
             ],
-            stops: <double>[0, 0.5, 1],
+            stops: const <double>[0, 0.25, 0.5, 0.75, 1],
           ).createShader(band),
       );
       canvas.restore();
@@ -358,17 +516,18 @@ class _PositionPainter extends CustomPainter {
       Offset(center, y - 13),
       Offset(center, y + 13),
       Paint()
-        ..color = const Color(0xFF28AFC2)
+        ..color = successColor
         ..strokeWidth = 1.5,
     );
     for (int i = -2; i <= 2; i++) {
+      if (precision && i.abs() == 1) continue;
       final double fraction = i / 2;
       final double x = center + fraction * halfWidth;
       canvas.drawLine(
-        Offset(x, y + 16),
-        Offset(x, y + 21),
+        Offset(x, y + (precision ? 8 : 16)),
+        Offset(x, y + (precision ? 11 : 21)),
         Paint()
-          ..color = const Color(0xFF9BADB9)
+          ..color = colors.outlineVariant
           ..strokeWidth = 1,
       );
       final double delta = fraction * range;
@@ -376,10 +535,10 @@ class _PositionPainter extends CustomPainter {
         text: TextSpan(
           text:
               '${delta > 0 ? '+' : ''}${_length(delta, centimeters, compact: true)}',
-          style: const TextStyle(
+          style: TextStyle(
             fontFamily: 'Roboto',
             fontSize: 10,
-            color: Color(0xFF62798C),
+            color: colors.onSurfaceVariant,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -389,7 +548,7 @@ class _PositionPainter extends CustomPainter {
         canvas,
         Offset(
           (x - label.width / 2).clamp(0, size.width - label.width).toDouble(),
-          y + 27,
+          y + (precision ? 14 : 27),
         ),
       );
       label.dispose();
@@ -400,7 +559,7 @@ class _PositionPainter extends CustomPainter {
     final double relative = (live - target) / range;
     final double x = center + relative.clamp(-1.0, 1.0).toDouble() * halfWidth;
     final Paint marker = Paint()
-      ..color = const Color(0xFF101820)
+      ..color = Colors.black
       ..strokeWidth = 2.5;
     canvas.drawLine(Offset(x, y - 14), Offset(x, y + 13), marker);
     final Path triangle = Path();
@@ -424,5 +583,8 @@ class _PositionPainter extends CustomPainter {
       target != oldDelegate.target ||
       tolerance != oldDelegate.tolerance ||
       range != oldDelegate.range ||
-      centimeters != oldDelegate.centimeters;
+      centimeters != oldDelegate.centimeters ||
+      colors != oldDelegate.colors ||
+      successColor != oldDelegate.successColor ||
+      precision != oldDelegate.precision;
 }

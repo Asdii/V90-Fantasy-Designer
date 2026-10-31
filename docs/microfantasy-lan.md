@@ -3,7 +3,7 @@
 ## Uso
 
 1. Actualiza firmware, app y V90. Conecta ordenador y movil a la misma LAN.
-2. En MicroFantasy activa Configuracion > V90 Fantasy Designer > Recibir por Wi-Fi.
+2. Mantén MicroFantasy abierta: la recepción Wi-Fi se inicia automáticamente.
 3. Crea cortes en V90 y abre Send to MicroFantasy.
 4. Usa Find phone o introduce la IP del movil. No se necesita codigo.
 5. Si X no marca cero en el centro de referencia, introduce esa lectura en
@@ -25,7 +25,7 @@ el ESP32 como puente. Requiere resolver su hostname y permiso de red local.
 
 Chrome/Edge actuales pueden pedir permiso de **red local** al conectar desde una página HTTPS, incluida GitHub Pages. El cliente declara `targetAddressSpace` y el receptor responde a CORS/preflight. El permiso y las restricciones de contenido mixto dependen del navegador; no se desactivan protecciones del equipo. Véase la [documentación de Local Network Access](https://developer.chrome.com/docs/modern-web-guidance/guides/security/local-network-access).
 
-Si el navegador bloquea la LAN, **Download JSON** genera exactamente el mismo trabajo con todo el Cut Helper. Transfiere el archivo e impórtalo desde Configuración en MicroFantasy. La recepción por red requiere la app nativa Android/iOS, no la versión web de simulación.
+La recepción por red requiere Android/iOS nativo. En la vista web de simulación no hay servidor LAN. Si el navegador bloquea el acceso, revisa el permiso de red local y usa la dirección IP del teléfono.
 
 ## Coordenadas compartidas
 

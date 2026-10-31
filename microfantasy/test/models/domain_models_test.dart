@@ -204,6 +204,7 @@ void main() {
         'activeProfileId': null,
         'haptics': true,
         'autoAdvance': false,
+        'appearance': 'atelier',
       });
       expect(settings.timeout, const Duration(seconds: 5));
       expect(

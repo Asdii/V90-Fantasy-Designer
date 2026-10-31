@@ -18,6 +18,8 @@ enum LengthUnit {
 
 enum SmoothingLevel { off, light, medium }
 
+enum AppearanceTheme { atelier, lagoon, porcelain, amethyst }
+
 /// Immutable settings; validation also runs outside debug builds.
 class AppSettings {
   factory AppSettings({
@@ -33,6 +35,7 @@ class AppSettings {
     String? activeProfileId,
     bool haptics = true,
     bool autoAdvance = false,
+    AppearanceTheme appearance = AppearanceTheme.atelier,
   }) {
     nonEmptyString(host, 'host');
     final Uri? hostUri = Uri.tryParse('http://$host');
@@ -66,6 +69,7 @@ class AppSettings {
       activeProfileId: activeProfileId,
       haptics: haptics,
       autoAdvance: autoAdvance,
+      appearance: appearance,
     );
   }
 
@@ -82,6 +86,7 @@ class AppSettings {
     required this.activeProfileId,
     required this.haptics,
     required this.autoAdvance,
+    required this.appearance,
   });
 
   factory AppSettings.fromJson(Map<String, Object?> json) {
@@ -126,6 +131,11 @@ class AppSettings {
         valueOrDefault(json, 'autoAdvance', false),
         'autoAdvance',
       ),
+      appearance: enumValue(
+        valueOrDefault(json, 'appearance', 'atelier'),
+        AppearanceTheme.values,
+        'appearance',
+      ),
     );
   }
 
@@ -143,6 +153,7 @@ class AppSettings {
   final String? activeProfileId;
   final bool haptics;
   final bool autoAdvance;
+  final AppearanceTheme appearance;
 
   Duration get timeout => Duration(seconds: timeoutSeconds);
 
@@ -160,6 +171,7 @@ class AppSettings {
     bool clearActiveProfileId = false,
     bool? haptics,
     bool? autoAdvance,
+    AppearanceTheme? appearance,
   }) {
     return AppSettings(
       simulation: simulation ?? this.simulation,
@@ -176,6 +188,7 @@ class AppSettings {
           : activeProfileId ?? this.activeProfileId,
       haptics: haptics ?? this.haptics,
       autoAdvance: autoAdvance ?? this.autoAdvance,
+      appearance: appearance ?? this.appearance,
     );
   }
 
@@ -192,5 +205,6 @@ class AppSettings {
     'activeProfileId': activeProfileId,
     'haptics': haptics,
     'autoAdvance': autoAdvance,
+    'appearance': appearance.name,
   };
 }

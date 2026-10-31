@@ -1,6 +1,6 @@
 # MicroFantasy
 
-Guía móvil de corte manual para lapidarios. El usuario gira R, mueve X hasta la zona de tolerancia y realiza el corte manualmente. La app **no controla motores**. Sólo X se mide y compensa; R y la profundidad son indicaciones para el operador.
+Guía móvil de corte manual para lapidarios. El usuario gira R, mueve X hasta la zona de tolerancia y realiza el corte manualmente. La app **no controla motores**. Sólo X se mide y compensa; la pantalla de corte muestra R como orientación manual. La profundidad se conserva en el trabajo recibido, pero no se muestra como indicador.
 
 Aplicación Flutter independiente de V90, con proyectos Android, iOS y una vista web de simulación. Tres secciones: **Corte · Calibración · Configuración**. Interfaz clara en español.
 
@@ -47,7 +47,7 @@ Vista de simulación en navegador:
 flutter run -d chrome
 ```
 
-En web funcionan las pantallas, la simulación y la importación JSON. La recepción HTTP y la conexión real al ESP32 son funciones nativas; no se ejecuta un servidor LAN dentro del navegador.
+En web funcionan las pantallas y la simulación. La recepción HTTP y la conexión real al ESP32 son funciones nativas; no se ejecuta un servidor LAN dentro del navegador.
 
 ## Probar sin hardware
 
@@ -59,7 +59,7 @@ El primer inicio abre **Hexágono de práctica**, con Modo simulación activado.
 4. En Calibración, centra una posición y toca **Establecer referencia**.
 5. Repite para otros ángulos; cada punto queda guardado inmediatamente.
 6. Regresa a Corte: con dos o más puntos se activa la compensación.
-7. Cierra y vuelve a abrir: se recuperan trabajo, paso, preferencias, perfiles y último trabajo pendiente.
+7. Cierra y vuelve a abrir: se recuperan trabajo, paso, preferencias, calibración y último trabajo pendiente.
 
 La simulación conserva la lectura manual y continúa publicándola; no caduca por dejar quieto el slider. La etiqueta Simulación permanece visible en Corte.
 
@@ -67,14 +67,14 @@ La simulación conserva la lectura manual y continúa publicándola; no caduca p
 
 Todos los datos se almacenan en **mm**. La opción cm sólo modifica las etiquetas.
 
-- Referencia: X centrado en el primer ángulo medido, normalmente 0°.
+- Referencia: X centrado obligatoriamente en 0°. La pantalla abre en 0° y no permite avanzar sin establecer esa referencia.
 - Offset: X medido menos X de referencia.
 - Rehacer el punto 0° actualiza también la referencia; los otros valores medidos se conservan.
 - Ángulos por defecto: 0, 30, …, 330°. Configurables en Preferencias.
-- Se conservan sólo puntos realmente medidos. Un perfil vacío o con un único punto de referencia aún no activa la compensación del trabajo.
+- Se conservan sólo puntos realmente medidos. Una calibración vacía o con un único punto de referencia aún no activa la compensación del trabajo.
 - Con dos o más puntos se interpola linealmente entre vecinos, incluido el intervalo que cruza 360°/0°. No se extrapola una tendencia fuera de esos vecinos.
-- El mapa es un gráfico radial del **offset X frente a R**. No representa una posición XY. Los valores positivos salen del círculo ideal; los negativos entran.
-- Cambiar Dirección X invierte la lectura y las mediciones del perfil, manteniendo su convención coherente. No invierte X nominal del patrón.
+- El mapa representa **offset X frente a R**. Cada punto se desplaza sólo horizontalmente desde su marca ideal; no se conectan los puntos con curvas ni se calcula una desviación Y.
+- Hay una única calibración, aplicada y guardada al capturar cada punto. Al actualizar se conserva la antigua calibración activa; si había varios perfiles se archivan localmente antes de consolidar. La inversión de X de instalaciones anteriores se respeta, sin selector en la interfaz.
 - El suavizado afecta exclusivamente al marcador visual; guardar calibración, comprobar tolerancia y calcular objetivos utiliza lecturas originales, sin filtrar.
 - Una lectura ausente, desconectada o caducada no da confirmación de posición.
 
@@ -90,7 +90,7 @@ double getCorrectedTargetX(CuttingStep step);
 
 ## Formato de trabajo V90
 
-Importar archivo JSON acepta el objeto completo siguiente. `units` debe ser `mm`, los índices deben ser únicos y el orden del arreglo es el orden de corte. X puede ser negativo; profundidad debe ser finita y no negativa; R entre 0° y 360°.
+El receptor Wi-Fi acepta el objeto JSON completo siguiente. `units` debe ser `mm`, los índices deben ser únicos y el orden del arreglo es el orden de corte. X puede ser negativo; profundidad debe ser finita y no negativa; R entre 0° y 360°.
 
 ```json
 {
@@ -120,7 +120,7 @@ Importar archivo JSON acepta el objeto completo siguiente. `units` debe ser `mm`
 
 `preview` es opcional. Sus coordenadas normalizadas están entre 0 y 1, origen arriba a la izquierda. Varios segmentos pueden compartir `stepIndex` para representar una polilínea; todos se resaltan juntos. Estos datos son exclusivamente visuales y nunca se usan para calcular X. Sin trazado se muestra un esquema de direcciones identificado como tal.
 
-Archivo listo para importar: [examples/fantasy-pattern.json](examples/fantasy-pattern.json).
+Ejemplo del contrato: [examples/fantasy-pattern.json](examples/fantasy-pattern.json).
 
 V90 también envía `cutHelper` v1 con el contorno de referencia, segmentos en mm,
 ancho de las ranuras, rueda, distancias con signo y vista inicial. **Abrir Cut Helper**
@@ -130,16 +130,16 @@ Contrato y coordenadas: [guía V90 → MicroFantasy](../docs/microfantasy-lan.md
 
 ## Recepcion local desde V90
 
-Activa Configuracion > V90 Fantasy Designer > Recibir por Wi-Fi y manten la app
-abierta. En V90 usa Send to MicroFantasy > Find phone, o introduce la IP del movil.
+La recepción Wi-Fi se activa automáticamente al abrir la app y al volver al
+primer plano. Mantén la app abierta. En V90 usa Send to MicroFantasy > Find phone, o introduce la IP del movil.
 No hay codigo de enlace. POST /api/v1/jobs acepta JSON sin Authorization y responde
 202 para un trabajo pendiente: el usuario decide abrirlo o reemplazar el actual.
 
 Find phone utiliza el ESP32 actualizado como puente. Para descubrir el movil debe
 estar conectado al ESP32 (sin simulacion) y con el receptor activo. IP manual
 funciona sin ESP32. Chrome/Edge pueden pedir permiso de red local.
-Si la red no permite conectar, Download JSON e Importar archivo JSON conservan
-el mismo Cut Helper. El receptor solo escucha en primer plano.
+El receptor solo escucha en primer plano. Ya no se muestra un botón de importación
+de trabajos JSON; los archivos de calibración siguen teniendo importación/exportación.
 
 Limites: 1 MiB por trabajo, 10 propuestas pendientes y timeout de cuerpo de 10 s.
 JSON invalido se rechaza antes de modificar el trabajo actual.
@@ -204,3 +204,17 @@ Capturas opcionales: `flutter test --update-goldens tool/visual_check_test.dart`
 El hardware ESP32 y la distribución iOS requieren validación en dispositivos físicos. La app no verifica físicamente R ni profundidad: dependen del ajuste manual.
 
 Referencias de implementación: [red en Flutter](https://docs.flutter.dev/data-and-backend/networking), [DNS-SD con nsd](https://pub.dev/packages/nsd), [configuración iOS](https://docs.flutter.dev/platform-integration/ios/setup).
+
+
+## Apariencia y guía X
+
+Preferencias ofrece cuatro temas claros, guardados localmente. El encabezado y
+los iconos Android/iOS usan el mismo dibujo vectorial de micromotor con gema.
+Para regenerar los tamaños del icono: `flutter test tool/generate_app_icons.dart`.
+
+La escala de la barra X anima el acercamiento independientemente de la frecuencia
+de telemetría. Una lupa centrada sobre la barra aparece cerca del objetivo sin
+mover la barra principal. El zoom y suavizado son sólo visuales: las lecturas,
+la calibración y la comprobación de tolerancia siempre usan el dato real.
+
+Modo simulación está en Configuración > Opciones avanzadas.

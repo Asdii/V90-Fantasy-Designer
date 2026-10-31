@@ -219,7 +219,7 @@ void main() {
     await tester.runAsync(() async {
       controller = AppController(
         store: MemoryStore(),
-        designer: LocalReceiverService(),
+        designer: LocalReceiverService(port: 0, bindAddress: '127.0.0.1'),
         updateService: FakeUpdates(),
       );
       await controller.initialize();

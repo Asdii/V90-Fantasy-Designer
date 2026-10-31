@@ -100,9 +100,6 @@ Future<void> showFullCutHelper(
                     ),
                     Text('R ${controller.step!.angleR.toStringAsFixed(1)}°'),
                     Text('Distancia ${controller.length(current.distanceMm)}'),
-                    Text(
-                      'Profundidad ${controller.length(controller.step!.depth)}',
-                    ),
                   ],
                 ),
               ),

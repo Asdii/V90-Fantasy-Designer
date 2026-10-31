@@ -25,7 +25,7 @@ void main() {
       final store = MemoryStore();
       final first = AppController(
         store: store,
-        designer: LocalReceiverService(),
+        designer: LocalReceiverService(port: 0, bindAddress: '127.0.0.1'),
       );
       await first.initialize();
       await first.updateSettings(first.settings.copyWith(haptics: false));
@@ -58,11 +58,11 @@ void main() {
       first.dispose();
       final second = AppController(
         store: store,
-        designer: LocalReceiverService(),
+        designer: LocalReceiverService(port: 0, bindAddress: '127.0.0.1'),
       );
       await second.initialize();
       expect(second.stepIndex, 2);
-      expect(second.calibrationAngle, 180);
+      expect(second.calibrationAngle, 0);
       expect(second.profile.points.length, 2);
       expect(second.pendingJob!.id, 'new');
       second.acceptPending();
@@ -77,7 +77,7 @@ void main() {
     () async {
       final c = AppController(
         store: MemoryStore(),
-        designer: LocalReceiverService(),
+        designer: LocalReceiverService(port: 0, bindAddress: '127.0.0.1'),
       );
       await c.initialize();
       await c.updateSettings(c.settings.copyWith(haptics: false));

@@ -11,30 +11,40 @@ class CutScreen extends StatelessWidget {
   final AppController controller;
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
     final c = controller;
     final job = c.job;
     final step = c.step;
     if (job == null || step == null) {
       return Center(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(
-                Icons.polyline_outlined,
-                size: 64,
-                color: Color(0xff187ba9),
-              ),
+              Icon(Icons.polyline_outlined, size: 48, color: colors.primary),
               const SizedBox(height: 20),
-              const Text('Tu próximo diseño empieza aquí'),
-              const SizedBox(height: 20),
-              FilledButton.icon(
-                onPressed: c.importJob,
-                icon: const Icon(Icons.file_open_outlined),
-                label: const Text('Importar patrón'),
+              Text(
+                'Tu próximo diseño empieza aquí',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.titleLarge,
               ),
-              TextButton(
+              const SizedBox(height: 12),
+              Text(
+                c.receiverSupported
+                    ? 'Abre V90 Fantasy Designer en la misma red Wi-Fi y envía '
+                          'tu diseño. La recepción está activa mientras esta '
+                          'app esté abierta.'
+                    : 'Envía tu diseño desde V90 Fantasy Designer a MicroFantasy '
+                          'en tu teléfono, con ambos dispositivos en la misma red Wi-Fi.',
+                textAlign: TextAlign.center,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: colors.onSurfaceVariant,
+                ),
+              ),
+              const SizedBox(height: 24),
+              OutlinedButton(
                 onPressed: c.loadDemo,
                 child: const Text('Probar un ejemplo'),
               ),
@@ -64,25 +74,12 @@ class CutScreen extends StatelessWidget {
       children: [
         Expanded(
           child: SingleChildScrollView(
+            key: const PageStorageKey('cut-scroll'),
             padding: const EdgeInsets.all(18),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        job.name,
-                        style: Theme.of(context).textTheme.titleLarge,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'Cambiar patrón',
-                      onPressed: c.importJob,
-                      icon: const Icon(Icons.folder_open_outlined),
-                    ),
-                  ],
-                ),
+                Text(job.name, style: theme.textTheme.titleLarge),
                 const SizedBox(height: 6),
                 Row(
                   children: [
@@ -97,7 +94,9 @@ class CutScreen extends StatelessWidget {
                           : c.actualX == null
                           ? 'Sin lectura'
                           : 'Conectado',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: theme.textTheme.bodySmall?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
                     ),
                   ],
                 ),
@@ -105,7 +104,8 @@ class CutScreen extends StatelessWidget {
                 LinearProgressIndicator(
                   value: (c.stepIndex + 1) / job.steps.length,
                   minHeight: 3,
-                  backgroundColor: const Color(0xffe4edf3),
+                  backgroundColor: colors.surfaceContainerHighest,
+                  borderRadius: BorderRadius.circular(2),
                 ),
                 if (job.cutHelper != null) ...[
                   SizedBox(
@@ -152,22 +152,10 @@ class CutScreen extends StatelessWidget {
                     'Esquema de direcciones · sin trazado adjunto',
                     textAlign: TextAlign.center,
                   ),
-                Row(
-                  children: [
-                    Expanded(
-                      child: _Metric(
-                        label: 'Ángulo R',
-                        value: '${step.angleR.toStringAsFixed(1)}°',
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: _Metric(
-                        label: 'Profundidad',
-                        value: c.length(step.depth),
-                      ),
-                    ),
-                  ],
+                const SizedBox(height: 12),
+                _Metric(
+                  label: 'Ángulo R',
+                  value: '${step.angleR.toStringAsFixed(1)}°',
                 ),
                 const SizedBox(height: 14),
                 XPositionGuide(
@@ -180,14 +168,16 @@ class CutScreen extends StatelessWidget {
                 if (job.cutHelper != null)
                   Text(
                     'X del centro: ${c.length(job.cutHelper!.machineCenterXmm)} · posiciones X con signo',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    style: theme.textTheme.bodySmall,
                   ),
                 const SizedBox(height: 8),
                 Text(
                   c.compensationActive
-                      ? 'Compensación activa · ${c.profile.name}'
+                      ? 'Compensación activa'
                       : 'Sin compensación de montaje',
-                  style: Theme.of(context).textTheme.bodySmall,
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
                 ),
               ],
             ),
@@ -233,17 +223,22 @@ class _Metric extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Card(
     child: Padding(
-      padding: const EdgeInsets.all(12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
         children: [
-          Text(label),
-          const SizedBox(height: 6),
-          FittedBox(
-            fit: BoxFit.scaleDown,
+          Expanded(
             child: Text(
-              value,
-              style: Theme.of(context).textTheme.headlineMedium,
+              label,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+              ),
+            ),
+          ),
+          const SizedBox(width: 16),
+          Flexible(
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(value, style: Theme.of(context).textTheme.titleLarge),
             ),
           ),
         ],

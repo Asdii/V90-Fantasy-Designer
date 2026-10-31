@@ -49,6 +49,11 @@ class AppController extends ChangeNotifier {
   JobProgress? progress;
   CuttingJob? pendingJob;
   int calibrationIndex = 0;
+  int calibrationSavedId = 0;
+  double? lastSavedCalibrationAngle;
+  int _calibrationRevision = 0;
+  bool _foreground = true;
+  Future<void> _receiverLifecycle = Future<void>.value();
   String helperDirection = 'horizontal';
   bool helperZeroView = false;
   double? rawX;
@@ -66,15 +71,14 @@ class AppController extends ChangeNotifier {
   CuttingJob? get job => progress?.job;
   CuttingStep? get step => progress?.current;
   int get stepIndex => progress?.index ?? 0;
-  CalibrationProfile get profile => profiles.firstWhere(
-    (p) => p.id == settings.activeProfileId,
-    orElse: () => profiles.first,
-  );
+  CalibrationProfile get profile => profiles.single;
   List<double> get angles => calibration.sampleAngles(settings.angleInterval);
   double get calibrationAngle =>
       angles[calibrationIndex.clamp(0, angles.length - 1)];
+  bool get hasCalibrationReference =>
+      profiles.isNotEmpty && profile.points.any((p) => p.angleR == 0);
   bool get compensationActive =>
-      profiles.isNotEmpty && profile.points.length >= 2;
+      hasCalibrationReference && profile.points.length >= 2;
   double getXOffsetForAngle(double angle) =>
       compensationActive ? calibration.offsetAt(profile, angle) : 0;
   double getCorrectedTargetX(CuttingStep step) =>
@@ -114,13 +118,22 @@ class AppController extends ChangeNotifier {
       if (profiles.isEmpty) {
         final initial = CalibrationProfile(
           id: 'principal',
-          name: 'Setup principal',
+          name: 'Calibración X',
           referenceX: 0,
           points: [],
         );
         profiles = [initial];
         await calibrations.save(initial);
       }
+      // Keep the previously active calibration, not an arbitrary first profile.
+      final selected = profiles.firstWhere(
+        (p) => p.id == settings.activeProfileId,
+        orElse: () => profiles.first,
+      );
+      profiles = [selected.copyWith(name: 'Calibración X')];
+      await calibrations.replaceWith(profile);
+      settings = settings.copyWith(activeProfileId: profile.id);
+      await preferences.save(settings);
       final session = await store.getString('microfantasy.session.v1');
       if (session == null) {
         progress = JobProgress(CuttingJob.demo());
@@ -133,10 +146,8 @@ class AppController extends ChangeNotifier {
                 CuttingJob.fromJson(Map<String, Object?>.from(data['job'])),
                 data['index'] as int? ?? 0,
               );
-        calibrationIndex = (data['calibrationIndex'] as int? ?? 0).clamp(
-          0,
-          angles.length - 1,
-        );
+        // Calibration always opens at its zero reference; cut progress resumes.
+        calibrationIndex = 0;
         helperDirection = data['helperDirection'] == 'vertical'
             ? 'vertical'
             : 'horizontal';
@@ -150,7 +161,7 @@ class AppController extends ChangeNotifier {
         profiles = [
           CalibrationProfile(
             id: 'principal',
-            name: 'Setup principal',
+            name: 'Calibración X',
             referenceX: 0,
             points: [],
           ),
@@ -180,6 +191,7 @@ class AppController extends ChangeNotifier {
         }
       }),
     );
+    await ensureReceiver();
     await _run(_connect);
     if (!settings.simulation && !(_esp?.currentStatus.isConnected ?? false)) {
       unawaited(discoverMachine());
@@ -294,11 +306,13 @@ class AppController extends ChangeNotifier {
   }
 
   void nextAngle() {
+    if (!hasCalibrationReference) return;
     calibrationIndex = (calibrationIndex + 1) % angles.length;
     _persistProgress();
   }
 
   void previousAngle() {
+    if (!hasCalibrationReference) return;
     calibrationIndex = (calibrationIndex - 1 + angles.length) % angles.length;
     _persistProgress();
   }
@@ -386,86 +400,131 @@ class AppController extends ChangeNotifier {
     _persistProgress();
   }
 
-  void selectProfile(String id) {
-    unawaited(updateSettings(settings.copyWith(activeProfileId: id)));
-    calibrationIndex = 0;
-  }
-
-  void addProfile(String name) {
-    final p = CalibrationProfile(
-      id: DateTime.now().microsecondsSinceEpoch.toString(),
-      name: name,
-      referenceX: 0,
-      points: [],
-    );
-    profiles = [...profiles, p];
-    _queue(() => calibrations.save(p));
-    selectProfile(p.id);
-  }
-
-  void _saveProfile(CalibrationProfile p) {
-    profiles = profiles.map((v) => v.id == p.id ? p : v).toList();
-    _queue(() => calibrations.save(p));
+  void _saveProfile(CalibrationProfile p, {double? savedAngle}) {
+    profiles = [p];
+    final revision = ++_calibrationRevision;
+    _queue(() async {
+      await calibrations.replaceWith(p);
+      if (!_disposed &&
+          revision == _calibrationRevision &&
+          savedAngle != null) {
+        lastSavedCalibrationAngle = savedAngle;
+        calibrationSavedId++;
+        _refresh();
+      }
+    });
     _refresh();
   }
 
   void saveCalibrationPoint() {
     final x = actualX;
     if (x == null) return;
-    final p = profile.points.isEmpty || calibrationAngle == 0
-        ? profile.copyWith(referenceX: x)
-        : profile;
-    _saveProfile(p.withPoint(CalibrationPoint(angleR: calibrationAngle, x: x)));
-    message('Punto guardado');
+    if (!hasCalibrationReference && calibrationAngle != 0) {
+      calibrationIndex = 0;
+      _refresh();
+      return;
+    }
+    final angle = calibrationAngle;
+    final p = angle == 0 ? profile.copyWith(referenceX: x) : profile;
+    _saveProfile(
+      p.withPoint(CalibrationPoint(angleR: angle, x: x)),
+      savedAngle: angle,
+    );
     if (settings.autoAdvance) nextAngle();
   }
 
-  void removeCalibrationPoint() =>
+  void removeCalibrationPoint() {
+    if (calibrationAngle == 0) {
+      resetCalibration();
+    } else {
       _saveProfile(profile.withoutPoint(calibrationAngle));
+    }
+  }
+
   void resetCalibration() {
-    _saveProfile(profile.copyWith(referenceX: 0, points: []));
     calibrationIndex = 0;
+    lastSavedCalibrationAngle = null;
+    _saveProfile(profile.copyWith(referenceX: 0, points: []));
     _persistProgress();
   }
 
-  Future<void> saveCalibration() => _run(() async {
-    await flush();
-    message('Calibración guardada');
-  });
   Future<void> exportCalibrations() => _run(() async {
     if (await files.saveJson(
-      'microfantasy-calibraciones.json',
-      jsonEncode({
-        'version': 1,
-        'profiles': profiles.map((p) => p.toJson()).toList(),
-      }),
+      'microfantasy-calibracion.json',
+      jsonEncode({'version': 2, 'calibration': profile.toJson()}),
     )) {
-      message('Calibraciones exportadas');
+      message('Calibración exportada');
     }
   });
   Future<void> importCalibrations() => _run(() async {
     final text = await files.readJson();
     if (text == null) return;
     final data = jsonDecode(text) as Map<String, dynamic>;
-    if (data['version'] != 1) {
+    final CalibrationProfile imported;
+    if (data['version'] == 2) {
+      imported = CalibrationProfile.fromJson(
+        Map<String, Object?>.from(data['calibration'] as Map),
+      );
+    } else if (data['version'] == 1) {
+      final old = (data['profiles'] as List)
+          .map((p) => CalibrationProfile.fromJson(Map<String, Object?>.from(p)))
+          .toList();
+      if (old.isEmpty) throw const FormatException('No hay mediciones');
+      imported = old.firstWhere(
+        (p) => p.id == profile.id,
+        orElse: () => old.first,
+      );
+    } else {
       throw const FormatException('Versión de calibración desconocida');
     }
-    final imported = (data['profiles'] as List)
-        .map((p) => CalibrationProfile.fromJson(Map<String, Object?>.from(p)))
-        .toList();
-    for (final p in imported) {
-      await calibrations.save(p);
-    }
-    profiles = await calibrations.load();
-    _refresh();
-    message('Calibraciones importadas');
+    // Imported measurements replace this one calibration, never add a profile.
+    final next = CalibrationProfile(
+      id: profile.id,
+      name: 'Calibración X',
+      referenceX: imported.referenceX,
+      points: imported.points,
+    );
+    await flush();
+    await calibrations.replaceWith(next);
+    _calibrationRevision++;
+    profiles = [next];
+    calibrationIndex = 0;
+    lastSavedCalibrationAngle = null;
+    _persistProgress();
+    message('Calibración importada');
   });
-  Future<void> toggleReceiver(bool enabled) =>
-      _run(() => enabled ? designer.start() : designer.stop());
-  Future<void> foreground(bool value) => _run(() async {
-    if (!value) await discovery.stop();
-    await designer.setForeground(value);
-  });
+
+  /// Listening is automatic in the foreground; mobile OS background limits
+  /// are respected. Serialize resume/start/stop to avoid competing HTTP binds.
+  Future<void> ensureReceiver() {
+    final request = _receiverLifecycle.then((_) async {
+      if (!_disposed && _foreground && receiverSupported) {
+        await designer.setForeground(true);
+        if (!_disposed && _foreground) await designer.start();
+      }
+    });
+    _receiverLifecycle = request.catchError((Object e) {
+      if (!_disposed) message('No se pudo activar la recepción Wi-Fi: $e');
+    });
+    return _receiverLifecycle;
+  }
+
+  Future<void> foreground(bool value) {
+    _foreground = value;
+    final request = _receiverLifecycle.then((_) async {
+      if (_disposed) return;
+      if (!value) await discovery.stop();
+      await designer.setForeground(value);
+      if (value && !_disposed && _foreground && receiverSupported) {
+        await designer.start();
+      }
+    });
+    _receiverLifecycle = request.catchError((Object e) {
+      if (!_disposed) message('No se pudo actualizar la recepción Wi-Fi: $e');
+    });
+    return _receiverLifecycle;
+  }
+
   Future<void> discoverMachine() => _run(() async {
     if (settings.simulation) {
       message('Máquina simulada disponible');

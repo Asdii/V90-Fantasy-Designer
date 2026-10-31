@@ -43,6 +43,7 @@ class PatternPreview extends StatelessWidget {
         aspectRatio: 1.25,
         child: CustomPaint(
           painter: _PatternPainter(
+            colors: Theme.of(context).colorScheme,
             lines: lines,
             activeIndex: activeIndex,
             activeIndices: selected,
@@ -55,6 +56,7 @@ class PatternPreview extends StatelessWidget {
 
 class _PatternPainter extends CustomPainter {
   _PatternPainter({
+    required this.colors,
     required List<List<Offset>> lines,
     required this.activeIndex,
     required Set<int> activeIndices,
@@ -65,6 +67,7 @@ class _PatternPainter extends CustomPainter {
        ),
        activeIndices = Set<int>.unmodifiable(activeIndices);
 
+  final ColorScheme colors;
   final List<List<Offset>> lines;
   final int activeIndex;
   final Set<int> activeIndices;
@@ -76,7 +79,7 @@ class _PatternPainter extends CustomPainter {
       Offset.zero & size,
       const Radius.circular(10),
     );
-    canvas.drawRRect(background, Paint()..color = const Color(0xFFF6FAFC));
+    canvas.drawRRect(background, Paint()..color = colors.surface);
     final double inset = math.min(20, size.shortestSide / 8);
     final double side = math.max(0, size.shortestSide - inset * 2);
     final Rect viewport = Rect.fromCenter(
@@ -85,7 +88,7 @@ class _PatternPainter extends CustomPainter {
       height: side,
     );
     final Paint grid = Paint()
-      ..color = const Color(0xFFE3EDF2)
+      ..color = colors.outlineVariant.withValues(alpha: .5)
       ..strokeWidth = 1;
     for (int i = 0; i <= 4; i++) {
       final double fraction = i / 4;
@@ -112,13 +115,13 @@ class _PatternPainter extends CustomPainter {
         canvas,
         viewport,
         lines[i],
-        i < activeIndex ? const Color(0xFFA9BAC6) : const Color(0xFF91D1DE),
+        i < activeIndex ? colors.outline : colors.primary.withValues(alpha: .4),
         1.8,
       );
     }
     for (int i = 0; i < lines.length; i++) {
       if (!activeIndices.contains(i)) continue;
-      _stroke(canvas, viewport, lines[i], const Color(0xFF1684D6), 3.2);
+      _stroke(canvas, viewport, lines[i], colors.primary, 3.2);
     }
     canvas.restore();
   }
@@ -160,7 +163,8 @@ class _PatternPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _PatternPainter oldDelegate) {
-    if (activeIndex != oldDelegate.activeIndex ||
+    if (colors != oldDelegate.colors ||
+        activeIndex != oldDelegate.activeIndex ||
         activeIndices.length != oldDelegate.activeIndices.length ||
         !activeIndices.containsAll(oldDelegate.activeIndices) ||
         lines.length != oldDelegate.lines.length) {

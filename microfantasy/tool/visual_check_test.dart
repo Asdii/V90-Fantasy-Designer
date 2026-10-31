@@ -36,7 +36,10 @@ void main() {
           'MaterialIcons',
         )..addFont(Future.value(ByteData.sublistView(bytes)))).load();
       }
-      c = AppController(store: MemoryStore(), designer: LocalReceiverService());
+      c = AppController(
+        store: MemoryStore(),
+        designer: LocalReceiverService(port: 0, bindAddress: '127.0.0.1'),
+      );
       await c.initialize();
       await c.updateSettings(c.settings.copyWith(haptics: false));
       // Real controller methods populate a nonzero circular calibration.
