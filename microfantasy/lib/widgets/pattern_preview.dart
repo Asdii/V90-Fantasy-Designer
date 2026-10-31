@@ -79,7 +79,6 @@ class _PatternPainter extends CustomPainter {
       Offset.zero & size,
       const Radius.circular(10),
     );
-    canvas.drawRRect(background, Paint()..color = colors.surface);
     final double inset = math.min(20, size.shortestSide / 8);
     final double side = math.max(0, size.shortestSide - inset * 2);
     final Rect viewport = Rect.fromCenter(

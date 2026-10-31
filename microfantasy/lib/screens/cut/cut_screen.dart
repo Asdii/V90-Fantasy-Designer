@@ -70,179 +70,197 @@ class CutScreen extends StatelessWidget {
     final active = segments == null
         ? c.stepIndex
         : segments.indexWhere((s) => s.stepIndex == step.index);
-    return Column(
+    Widget preview() => Stack(
+      fit: StackFit.expand,
+      children: [
+        Center(
+          child: job.cutHelper != null
+              ? V90CutHelper(
+                  data: job.cutHelper!,
+                  stepIndex: c.stepIndex,
+                  angleDeg: step.angleR,
+                  direction: c.helperDirection,
+                  zeroView: c.helperZeroView,
+                )
+              : PatternPreview(
+                  lines: lines,
+                  activeIndex: active,
+                  activeIndices: segments == null
+                      ? null
+                      : {
+                          for (var i = 0; i < segments.length; i++)
+                            if (segments[i].stepIndex == step.index) i,
+                        },
+                ),
+        ),
+        if (job.cutHelper != null)
+          Positioned(
+            right: 0,
+            top: 0,
+            child: IconButton(
+              tooltip: 'Abrir Cut Helper',
+              onPressed: () => showFullCutHelper(context, c),
+              icon: const Icon(Icons.open_in_full, size: 19),
+            ),
+          ),
+      ],
+    );
+
+    final summary = Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
         Expanded(
-          child: SingleChildScrollView(
-            key: const PageStorageKey('cut-scroll'),
-            padding: const EdgeInsets.all(18),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Text(job.name, style: theme.textTheme.titleLarge),
-                const SizedBox(height: 6),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        'Paso ${c.stepIndex + 1} de ${job.steps.length}',
-                      ),
-                    ),
-                    Text(
-                      c.settings.simulation
-                          ? 'Simulación'
-                          : c.actualX == null
-                          ? 'Sin lectura'
-                          : 'Conectado',
-                      style: theme.textTheme.bodySmall?.copyWith(
-                        color: colors.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                job.name,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.titleMedium,
+              ),
+              Text(
+                'Paso ${c.stepIndex + 1} de ${job.steps.length}',
+                style: theme.textTheme.bodyMedium,
+              ),
+              Text(
+                c.compensationActive
+                    ? 'Compensación activa'
+                    : 'Sin compensación de montaje',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: theme.textTheme.labelSmall?.copyWith(
+                  color: colors.onSurfaceVariant,
                 ),
-                const SizedBox(height: 12),
-                LinearProgressIndicator(
-                  value: (c.stepIndex + 1) / job.steps.length,
-                  minHeight: 3,
-                  backgroundColor: colors.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                if (job.cutHelper != null) ...[
-                  SizedBox(
-                    height: 260,
-                    child: V90CutHelper(
-                      data: job.cutHelper!,
-                      stepIndex: c.stepIndex,
-                      angleDeg: step.angleR,
-                      direction: c.helperDirection,
-                      zeroView: c.helperZeroView,
-                    ),
-                  ),
-                  Wrap(
-                    alignment: WrapAlignment.spaceBetween,
-                    crossAxisAlignment: WrapCrossAlignment.center,
-                    spacing: 8,
-                    children: [
-                      Text(
-                        'Desde el centro: ${c.length(job.cutHelper!.steps[c.stepIndex].distanceMm)}',
-                      ),
-                      TextButton.icon(
-                        onPressed: () => showFullCutHelper(context, c),
-                        icon: const Icon(Icons.open_in_full),
-                        label: const Text('Abrir Cut Helper'),
-                      ),
-                    ],
-                  ),
-                ] else
-                  SizedBox(
-                    height: 170,
-                    child: PatternPreview(
-                      lines: lines,
-                      activeIndex: active,
-                      activeIndices: segments == null
-                          ? null
-                          : {
-                              for (var i = 0; i < segments.length; i++)
-                                if (segments[i].stepIndex == step.index) i,
-                            },
-                    ),
-                  ),
-                if (segments == null && job.cutHelper == null)
-                  const Text(
-                    'Esquema de direcciones · sin trazado adjunto',
-                    textAlign: TextAlign.center,
-                  ),
-                const SizedBox(height: 12),
-                _Metric(
-                  label: 'Ángulo R',
-                  value: '${step.angleR.toStringAsFixed(1)}°',
-                ),
-                const SizedBox(height: 14),
-                XPositionGuide(
-                  actualMm: c.actualX,
-                  targetMm: c.correctedTarget,
-                  toleranceMm: c.settings.tolerance,
-                  smoothing: c.settings.smoothing.name,
-                  centimeters: c.settings.units.name == 'cm',
-                ),
-                if (job.cutHelper != null)
-                  Text(
-                    'X del centro: ${c.length(job.cutHelper!.machineCenterXmm)} · posiciones X con signo',
-                    style: theme.textTheme.bodySmall,
-                  ),
-                const SizedBox(height: 8),
-                Text(
-                  c.compensationActive
-                      ? 'Compensación activa'
-                      : 'Sin compensación de montaje',
-                  style: theme.textTheme.bodySmall?.copyWith(
-                    color: colors.onSurfaceVariant,
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
-        SafeArea(
-          top: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 10, 18, 12),
-            child: Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: c.stepIndex > 0 ? c.previousStep : null,
-                    icon: const Icon(Icons.arrow_back),
-                    label: const Text('Anterior'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: c.stepIndex < job.steps.length - 1
-                        ? c.nextStep
-                        : null,
-                    iconAlignment: IconAlignment.end,
-                    icon: const Icon(Icons.arrow_forward),
-                    label: const Text('Siguiente'),
-                  ),
-                ),
-              ],
+        const SizedBox(width: 12),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            Text('Ángulo R', style: theme.textTheme.labelMedium),
+            Text(
+              '${step.angleR.toStringAsFixed(1)}°',
+              style: theme.textTheme.titleLarge?.copyWith(
+                fontFeatures: const [FontFeature.tabularFigures()],
+                color: colors.primary,
+              ),
             ),
-          ),
+          ],
         ),
       ],
     );
-  }
-}
-
-class _Metric extends StatelessWidget {
-  const _Metric({required this.label, required this.value});
-  final String label;
-  final String value;
-  @override
-  Widget build(BuildContext context) => Card(
-    child: Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+    final guide = XPositionGuide(
+      actualMm: c.actualX,
+      targetMm: c.correctedTarget,
+      toleranceMm: c.settings.tolerance,
+      smoothing: c.settings.smoothing.name,
+      centimeters: c.settings.units.name == 'cm',
+    );
+    final navigation = Padding(
+      padding: const EdgeInsets.only(top: 8),
       child: Row(
         children: [
           Expanded(
-            child: Text(
-              label,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
+            child: OutlinedButton.icon(
+              onPressed: c.stepIndex > 0 ? c.previousStep : null,
+              icon: const Icon(Icons.arrow_back),
+              label: const FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('Anterior', maxLines: 1),
               ),
             ),
           ),
-          const SizedBox(width: 16),
-          Flexible(
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Text(value, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(width: 12),
+          Expanded(
+            child: FilledButton.icon(
+              onPressed: c.stepIndex < job.steps.length - 1 ? c.nextStep : null,
+              iconAlignment: IconAlignment.end,
+              icon: const Icon(Icons.arrow_forward),
+              label: const FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text('Siguiente', maxLines: 1),
+              ),
             ),
           ),
         ],
       ),
-    ),
-  );
+    );
+    // Only the drawing flexes. Readings, the X ruler and navigation retain
+    // their dimensions when a large V90 pattern or a new step arrives.
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(18, 8, 18, 8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          if (constraints.maxWidth >= 560 && constraints.maxHeight < 570) {
+            return Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    children: [
+                      summary,
+                      Expanded(child: preview()),
+                      navigation,
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 18),
+                SizedBox(
+                  width: 320,
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [guide],
+                  ),
+                ),
+              ],
+            );
+          }
+          if (constraints.maxHeight < 440) {
+            return Column(
+              children: [
+                Expanded(
+                  child: Row(
+                    children: [
+                      Expanded(
+                        flex: 3,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: SizedBox(
+                            width: constraints.maxWidth * .62,
+                            child: summary,
+                          ),
+                        ),
+                      ),
+                      Expanded(flex: 2, child: preview()),
+                    ],
+                  ),
+                ),
+                guide,
+                navigation,
+              ],
+            );
+          }
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              summary,
+              const SizedBox(height: 4),
+              LinearProgressIndicator(
+                value: (c.stepIndex + 1) / job.steps.length,
+                minHeight: 2,
+                backgroundColor: colors.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(2),
+              ),
+              Expanded(child: preview()),
+              guide,
+              navigation,
+            ],
+          );
+        },
+      ),
+    );
+  }
 }

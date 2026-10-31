@@ -18,7 +18,15 @@ enum LengthUnit {
 
 enum SmoothingLevel { off, light, medium }
 
-enum AppearanceTheme { atelier, lagoon, porcelain, amethyst }
+enum AppearanceTheme {
+  atelier,
+  lagoon,
+  porcelain,
+  amethyst,
+  sunstone,
+  arctic,
+  midnight,
+}
 
 /// Immutable settings; validation also runs outside debug builds.
 class AppSettings {

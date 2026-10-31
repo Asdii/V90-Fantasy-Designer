@@ -54,6 +54,11 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
     if (c.noticeId != _lastNotice && c.notice != null) {
       _lastNotice = c.noticeId;
       final text = c.notice!;
+      // The incoming-job card already announces the design and offers actions.
+      // Do not also cover the cutting controls with a duplicate toast.
+      if (c.pendingJob != null && text.startsWith('Nuevo patrón recibido')) {
+        return;
+      }
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         _messenger.currentState?.hideCurrentSnackBar();
@@ -93,6 +98,8 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
       listenable: widget.controller,
       builder: (context, _) {
         final c = widget.controller;
+        final compact = MediaQuery.sizeOf(context).height < 740;
+        final landscape = MediaQuery.sizeOf(context).aspectRatio > 1.4;
         return Scaffold(
           body: SafeArea(
             child: Center(
@@ -100,47 +107,60 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                 constraints: const BoxConstraints(maxWidth: 720),
                 child: Column(
                   children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(18, 14, 18, 12),
-                      child: Row(
-                        children: [
-                          const MicroFantasyMark(),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'MicroFantasy',
-                                  style: Theme.of(context).textTheme.titleLarge
-                                      ?.copyWith(
-                                        fontWeight: FontWeight.w700,
-                                        letterSpacing: -.6,
-                                      ),
-                                ),
-                                Text(
-                                  'Guía de corte manual',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
-                          ),
-                          if (c.ready)
-                            Tooltip(
-                              message: c.connectionLabel,
-                              child: Icon(
-                                c.settings.simulation
-                                    ? Icons.science_outlined
-                                    : c.actualX != null
-                                    ? Icons.wifi
-                                    : Icons.wifi_off,
-                                size: 21,
-                                color: Theme.of(context).colorScheme.primary,
+                    if (!landscape)
+                      Padding(
+                        padding: EdgeInsets.fromLTRB(
+                          18,
+                          compact ? 4 : 10,
+                          18,
+                          compact ? 4 : 8,
+                        ),
+                        child: Row(
+                          children: [
+                            MicroFantasyMark(size: compact ? 32 : 40),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'MicroFantasy',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .titleLarge
+                                        ?.copyWith(
+                                          fontWeight: FontWeight.w700,
+                                          letterSpacing: -.6,
+                                        ),
+                                  ),
+                                  if (!compact)
+                                    Text(
+                                      'Guía de corte manual',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                ],
                               ),
                             ),
-                        ],
+                            if (c.ready)
+                              Tooltip(
+                                message: c.connectionLabel,
+                                child: Icon(
+                                  c.settings.simulation
+                                      ? Icons.science_outlined
+                                      : c.actualX != null
+                                      ? Icons.wifi
+                                      : Icons.wifi_off,
+                                  size: 21,
+                                  color: Theme.of(context).colorScheme.primary,
+                                ),
+                              ),
+                          ],
+                        ),
                       ),
-                    ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 14),
                       child: Container(
@@ -173,22 +193,27 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                                           setState(() => _tab = entry.key),
                                       child: Padding(
                                         padding: const EdgeInsets.symmetric(
-                                          vertical: 15,
+                                          vertical: 12,
                                           horizontal: 2,
                                         ),
-                                        child: Text(
-                                          entry.value,
-                                          textAlign: TextAlign.center,
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
-                                            color: _tab == entry.key
-                                                ? Theme.of(
-                                                    context,
-                                                  ).colorScheme.primary
-                                                : Theme.of(context)
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          child: Text(
+                                            entry.value,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            textAlign: TextAlign.center,
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w600,
+                                              color: _tab == entry.key
+                                                  ? Theme.of(
+                                                      context,
+                                                    ).colorScheme.primary
+                                                  : Theme.of(context)
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                            ),
                                           ),
                                         ),
                                       ),

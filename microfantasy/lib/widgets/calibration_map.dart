@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 
 /// Measured X deviations in mm, indexed by R in degrees clockwise from the top.
 /// Each point keeps its reference Y and moves horizontally by its signed X
-/// offset. The reference circle locates angles; samples never form a contour.
+/// offset. A completed set is joined in angle order as an X-offset silhouette,
+/// not as a measured XY trajectory; there is no radial displacement or spline.
 class CalibrationMap extends StatelessWidget {
   const CalibrationMap({
     super.key,
@@ -31,6 +32,14 @@ class CalibrationMap extends StatelessWidget {
     final samples = [
       for (final angle in knownAngles) _XSample(angle, normalized[angle]!),
     ];
+    final requested = angles
+        .where((a) => a.isFinite)
+        .map((a) => a % 360)
+        .toSet();
+    final complete =
+        requested.length >= 3 &&
+        requested.contains(0) &&
+        requested.every(normalized.containsKey);
     final current = currentAngle.isFinite ? currentAngle % 360 : null;
     final labels = <double>{
       0,
@@ -80,6 +89,7 @@ class CalibrationMap extends StatelessWidget {
                 child: CustomPaint(
                   painter: _CalibrationPainter(
                     samples: samples,
+                    complete: complete,
                     angles: labels,
                     current: current,
                     maxOffset: maxOffset,
@@ -102,7 +112,7 @@ class CalibrationMap extends StatelessWidget {
                   _Legend(
                     color: colors.primary,
                     icon: Icons.circle,
-                    label: 'Medición X',
+                    label: complete ? 'Perfil X completo' : 'Medición X',
                   ),
                 ],
               ),
@@ -158,6 +168,7 @@ class _XSample {
 class _CalibrationPainter extends CustomPainter {
   const _CalibrationPainter({
     required this.samples,
+    required this.complete,
     required this.angles,
     required this.current,
     required this.maxOffset,
@@ -166,6 +177,7 @@ class _CalibrationPainter extends CustomPainter {
   });
 
   final List<_XSample> samples;
+  final bool complete;
   final List<double> angles;
   final double? current;
   final double maxOffset;
@@ -232,6 +244,29 @@ class _CalibrationPainter extends CustomPainter {
           ..strokeWidth = 1.5,
       );
     }
+    if (complete) {
+      final contour = Path()
+        ..addPolygon([
+          for (final sample in samples)
+            _anchor(center, base, sample.angle) +
+                Offset(
+                  maxOffset == 0 ? 0 : sample.offset / maxOffset * amplitude,
+                  0,
+                ),
+        ], true);
+      canvas.drawPath(
+        contour,
+        Paint()..color = colors.primary.withValues(alpha: .08),
+      );
+      canvas.drawPath(
+        contour,
+        Paint()
+          ..color = colors.primary.withValues(alpha: .7)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.6
+          ..strokeJoin = StrokeJoin.round,
+      );
+    }
     for (final sample in samples) {
       final anchor = _anchor(center, base, sample.angle);
       final dx = maxOffset == 0 ? 0.0 : sample.offset / maxOffset * amplitude;
@@ -289,7 +324,8 @@ class _CalibrationPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _CalibrationPainter oldDelegate) {
-    if (current != oldDelegate.current ||
+    if (complete != oldDelegate.complete ||
+        current != oldDelegate.current ||
         maxOffset != oldDelegate.maxOffset ||
         colors != oldDelegate.colors ||
         textStyle != oldDelegate.textStyle ||

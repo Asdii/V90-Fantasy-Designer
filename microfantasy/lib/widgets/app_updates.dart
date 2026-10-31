@@ -15,7 +15,7 @@ class AppUpdateBanner extends StatelessWidget {
         margin: const EdgeInsets.fromLTRB(18, 10, 18, 0),
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: const Color(0xffe1f3fb),
+          color: Theme.of(context).colorScheme.primaryContainer,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Wrap(

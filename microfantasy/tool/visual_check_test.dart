@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:microfantasy/app/app_controller.dart';
 import 'package:microfantasy/main.dart';
 import 'package:microfantasy/models/cutting_job.dart';
+import 'package:microfantasy/models/app_settings.dart';
 import 'package:microfantasy/repositories/key_value_store.dart';
 import 'package:microfantasy/services/fantasy_designer/local_receiver_service.dart';
 
@@ -82,9 +83,38 @@ void main() {
     });
     await tester.tap(find.text('Corte'));
     await tester.pump(const Duration(milliseconds: 600));
-    await tester.ensureVisible(find.text('Abrir Cut Helper'));
+    c.simulateX(c.correctedTarget + .005);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MicroFantasyApp),
+      matchesGoldenFile('../build/qa/cut-v90.png'),
+    );
+    await tester.runAsync(
+      () => c.updateSettings(
+        c.settings.copyWith(appearance: AppearanceTheme.midnight),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MicroFantasyApp),
+      matchesGoldenFile('../build/qa/cut-midnight.png'),
+    );
+    tester.view.physicalSize = const Size(360, 640);
+    await tester.pumpAndSettle();
+    await expectLater(
+      find.byType(MicroFantasyApp),
+      matchesGoldenFile('../build/qa/cut-compact.png'),
+    );
+    tester.view.physicalSize = const Size(390, 844);
+    await tester.runAsync(
+      () => c.updateSettings(
+        c.settings.copyWith(appearance: AppearanceTheme.atelier),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byTooltip('Abrir Cut Helper'));
     await tester.pump(const Duration(milliseconds: 500));
-    await tester.tap(find.text('Abrir Cut Helper'));
+    await tester.tap(find.byTooltip('Abrir Cut Helper'));
     await tester.pumpAndSettle();
     expect(find.text('Cut Helper · V90'), findsOneWidget);
     await expectLater(

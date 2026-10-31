@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import '../../app/app_controller.dart';
 import '../../app/theme.dart';
 import '../../models/app_settings.dart';
@@ -21,44 +20,6 @@ class SettingsScreen extends StatelessWidget {
       children: [
         Text('A tu manera', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 18),
-        Section(
-          title: 'Apariencia',
-          children: [
-            const Text('Cuatro temas claros para tu espacio de trabajo.'),
-            const SizedBox(height: 14),
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final twoColumns =
-                    constraints.maxWidth >= 600 &&
-                    MediaQuery.textScalerOf(context).scale(16) <= 20;
-                final width = twoColumns
-                    ? (constraints.maxWidth - 10) / 2
-                    : constraints.maxWidth;
-                return Wrap(
-                  spacing: 10,
-                  runSpacing: 10,
-                  children: [
-                    for (final appearance in AppearanceTheme.values)
-                      SizedBox(
-                        width: width,
-                        child: _AppearanceCard(
-                          key: ValueKey(appearance),
-                          appearance: appearance,
-                          selected: s.appearance == appearance,
-                          onTap: () => c.updateSettings(
-                            c.settings.copyWith(appearance: appearance),
-                          ),
-                        ),
-                      ),
-                  ],
-                );
-              },
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        AppUpdatesCard(controller: c.updates),
-        const SizedBox(height: 14),
         Section(
           title: 'Máquina',
           children: [
@@ -124,51 +85,19 @@ class SettingsScreen extends StatelessWidget {
               contentPadding: EdgeInsets.zero,
               leading: Icon(c.receiving ? Icons.wifi : Icons.wifi_off),
               title: Text(
-                c.receiverSupported
-                    ? c.receiverLabel
-                    : 'Recepción por Wi-Fi no disponible en este entorno',
+                c.receiving
+                    ? 'Lista para recibir diseños'
+                    : c.receiverSupported
+                    ? 'Preparando recepción Wi-Fi'
+                    : 'Recepción Wi-Fi no disponible',
               ),
             ),
-            if (c.receiverSupported) ...[
-              const Text(
-                'Recepción automática mientras la app está abierta. '
-                'Conecta ambos dispositivos a la misma red Wi-Fi.',
+            if (c.receiverSupported && !c.receiving)
+              OutlinedButton.icon(
+                onPressed: c.busy ? null : c.ensureReceiver,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reintentar recepción'),
               ),
-              const SizedBox(height: 12),
-              SelectableText(
-                c.receiverAddress,
-                key: const PageStorageKey('receiver-address'),
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              if (c.receiving && c.designer.endpoints.isNotEmpty) ...[
-                const SizedBox(height: 6),
-                const Text(
-                  'Usa Buscar teléfono en V90 o introduce esta dirección. '
-                  'No necesitas un código de enlace.',
-                ),
-                TextButton.icon(
-                  onPressed: () async {
-                    await Clipboard.setData(
-                      ClipboardData(text: c.receiverAddress),
-                    );
-                    if (!context.mounted) return;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Dirección copiada')),
-                    );
-                  },
-                  icon: const Icon(Icons.copy_outlined),
-                  label: const Text('Copiar dirección'),
-                ),
-              ],
-              if (!c.receiving) ...[
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: c.busy ? null : c.ensureReceiver,
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Reintentar recepción'),
-                ),
-              ],
-            ],
           ],
         ),
         const SizedBox(height: 14),
@@ -179,8 +108,8 @@ class SettingsScreen extends StatelessWidget {
               LengthUnit.mm: 'Milímetros',
               LengthUnit.cm: 'Centímetros',
             }, (v) => c.updateSettings(s.copyWith(units: v))),
-            _choice<SmoothingLevel>('Suavizado visual', s.smoothing, {
-              SmoothingLevel.off: 'Desactivado',
+            _choice<SmoothingLevel>('Respuesta visual', s.smoothing, {
+              SmoothingLevel.off: 'Ligero',
               SmoothingLevel.light: 'Suave',
               SmoothingLevel.medium: 'Medio',
             }, (v) => c.updateSettings(s.copyWith(smoothing: v))),
@@ -249,6 +178,44 @@ class SettingsScreen extends StatelessWidget {
         ),
         const SizedBox(height: 14),
         Section(
+          title: 'Temas',
+          children: [
+            const Text(
+              'Elige el ambiente de tu taller. Seis temas claros y uno nocturno.',
+            ),
+            const SizedBox(height: 14),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final twoColumns =
+                    constraints.maxWidth >= 600 &&
+                    MediaQuery.textScalerOf(context).scale(16) <= 20;
+                final width = twoColumns
+                    ? (constraints.maxWidth - 10) / 2
+                    : constraints.maxWidth;
+                return Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  children: [
+                    for (final appearance in AppearanceTheme.values)
+                      SizedBox(
+                        width: width,
+                        child: _AppearanceCard(
+                          key: ValueKey(appearance),
+                          appearance: appearance,
+                          selected: s.appearance == appearance,
+                          onTap: () => c.updateSettings(
+                            c.settings.copyWith(appearance: appearance),
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+          ],
+        ),
+        const SizedBox(height: 14),
+        Section(
           title: 'Datos',
           children: [
             _action(
@@ -283,6 +250,7 @@ class SettingsScreen extends StatelessWidget {
                 c.clearJob();
               }
             }),
+            AppUpdatesCard(controller: c.updates),
             _action(Icons.restart_alt, 'Restaurar configuración', () async {
               if (await confirm(
                 context,
@@ -427,11 +395,23 @@ class _AppearanceCard extends StatelessWidget {
       ),
       AppearanceTheme.porcelain => (
         'Porcelain',
-        'Blanco suave y grafito, con acentos discretos.',
+        'Porcelana, azul grafito y acentos malva.',
       ),
       AppearanceTheme.amethyst => (
         'Amethyst',
-        'Lavanda tenue y detalles violeta.',
+        'Lavanda luminosa y violeta profundo.',
+      ),
+      AppearanceTheme.sunstone => (
+        'Sunstone',
+        'Arena dorada y ámbar, con detalles azul mineral.',
+      ),
+      AppearanceTheme.arctic => (
+        'Arctic',
+        'Azul cobalto y hielo, con acentos iris.',
+      ),
+      AppearanceTheme.midnight => (
+        'Midnight',
+        'Azul noche, acero y luz celeste. Tema oscuro.',
       ),
     };
     final borderRadius = BorderRadius.circular(12);

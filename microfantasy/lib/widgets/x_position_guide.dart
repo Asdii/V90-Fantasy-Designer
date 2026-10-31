@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 /// A display-only guide. All inputs and tolerance comparisons remain in mm.
 /// [centimeters] changes labels only. [smoothing] accepts off, light or medium
 /// (unknown names use off); it never filters or compensates a measurement.
-/// Scale changes animate even when marker smoothing is off.
+/// Even off retains short frame interpolation; readings and status stay raw.
 class XPositionGuide extends StatefulWidget {
   const XPositionGuide({
     super.key,
@@ -45,9 +45,9 @@ class _XPositionGuideState extends State<XPositionGuide>
 
   static Duration _duration(String smoothing) {
     return switch (smoothing.trim().toLowerCase()) {
-      'light' => const Duration(milliseconds: 100),
-      'medium' => const Duration(milliseconds: 200),
-      _ => Duration.zero,
+      'light' => const Duration(milliseconds: 140),
+      'medium' => const Duration(milliseconds: 220),
+      _ => const Duration(milliseconds: 90),
     };
   }
 
@@ -72,10 +72,16 @@ class _XPositionGuideState extends State<XPositionGuide>
   }
 
   double get _visualRange {
-    final double progress = Curves.easeInOutCubic.transform(
+    final double progress = Curves.easeInOutSine.transform(
       _scaleController.value,
     );
-    return _rangeFrom * (1 - progress) + _rangeTo * progress;
+    // Interpolate magnification logarithmically, so a 5 → 1 → .4 mm zoom
+    // has an even visual pace instead of accelerating at the very end.
+    if (progress == 1) return _rangeTo;
+    if (progress == 0) return _rangeFrom;
+    return math.exp(
+      math.log(_rangeFrom) * (1 - progress) + math.log(_rangeTo) * progress,
+    );
   }
 
   double? get _visualActual {
@@ -85,9 +91,7 @@ class _XPositionGuideState extends State<XPositionGuide>
     final double progress = Curves.easeOutCubic.transform(
       _markerController.value,
     );
-    final double visual = start * (1 - progress) + end * progress;
-    // Even rounding at a boundary must not place an outside reading in the band.
-    return _zone(visual) == _zone(end) ? visual : end;
+    return start * (1 - progress) + end * progress;
   }
 
   double get _precisionRange {
@@ -108,12 +112,6 @@ class _XPositionGuideState extends State<XPositionGuide>
         (actual - widget.targetMm).abs() <= threshold;
   }
 
-  int _zone(double value) {
-    final double error = value - widget.targetMm;
-    if (error.abs() <= widget.toleranceMm) return 0;
-    return error < 0 ? -1 : 1;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -122,7 +120,7 @@ class _XPositionGuideState extends State<XPositionGuide>
     _scaleController = AnimationController(
       vsync: this,
       value: 1,
-      duration: const Duration(milliseconds: 240),
+      duration: const Duration(milliseconds: 620),
     );
     _markerController = AnimationController(vsync: this, value: 1);
     _animations = Listenable.merge([_scaleController, _markerController]);
@@ -154,20 +152,10 @@ class _XPositionGuideState extends State<XPositionGuide>
       _rangeTo = nextRange;
       _scaleController.forward(from: 0);
     }
-    // Never animate across a tolerance boundary: crossing the band must
-    // reflect the raw sensor, including opposite-side jumps and disconnection.
-    final bool sameZone =
-        previous != null &&
-        next != null &&
-        widget.targetMm.isFinite &&
-        _validTolerance(widget.toleranceMm) &&
-        oldWidget.targetMm == widget.targetMm &&
-        oldWidget.toleranceMm == widget.toleranceMm &&
-        _zone(previous) == _zone(next);
+    // Retarget from the currently displayed position, including tolerance
+    // crossings. Only the graphic eases: actual labels/success never lag.
     final Duration smoothingDuration = _duration(widget.smoothing);
-    _actualFrom = sameZone && smoothingDuration != Duration.zero
-        ? previous
-        : next;
+    _actualFrom = previous != null && next != null ? previous : next;
     _actualTo = next;
     _markerController.stop();
     if (_actualFrom == _actualTo) {
@@ -230,7 +218,7 @@ class _XPositionGuideState extends State<XPositionGuide>
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -271,95 +259,148 @@ class _XPositionGuideState extends State<XPositionGuide>
                   );
                   return Column(
                     children: <Widget>[
-                      // Keep this slot even when hidden so the main bar never
-                      // moves as a measurement enters or leaves the detail view.
+                      // Reserve both layers: the main ruler never moves when
+                      // the detail lens appears. The funnel points to its exact
+                      // represented interval on the main ruler.
                       SizedBox(
-                        height:
-                            92 +
-                            math.max(
-                              0,
-                              MediaQuery.textScalerOf(context).scale(11) - 11,
-                            ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                          child: AnimatedOpacity(
-                            opacity: _showPrecision ? 1 : 0,
-                            duration: const Duration(milliseconds: 180),
-                            curve: Curves.easeOut,
-                            child: DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: colors.surfaceContainerLow,
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Column(
-                                children: <Widget>[
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    'Detalle · ±${_length(_precisionRange, widget.centimeters, compact: true)}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: theme.textTheme.labelSmall?.copyWith(
-                                      color: colors.onSurfaceVariant,
+                        height: 180,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: IgnorePointer(
+                                child: AnimatedOpacity(
+                                  opacity: _showPrecision ? 1 : 0,
+                                  duration: const Duration(milliseconds: 280),
+                                  curve: Curves.easeInOut,
+                                  child: CustomPaint(
+                                    key: const ValueKey('x-zoom-connector'),
+                                    painter: _ZoomConnectorPainter(
+                                      range: range,
+                                      detailRange: _precisionRange,
+                                      colors: colors,
+                                    ),
+                                    child: Align(
+                                      alignment: Alignment.topCenter,
+                                      child: AnimatedSlide(
+                                        offset: Offset(
+                                          0,
+                                          _showPrecision ? 0 : .08,
+                                        ),
+                                        duration: const Duration(
+                                          milliseconds: 280,
+                                        ),
+                                        curve: Curves.easeOutCubic,
+                                        child: Container(
+                                          height: 72,
+                                          margin: const EdgeInsets.fromLTRB(
+                                            16,
+                                            8,
+                                            16,
+                                            0,
+                                          ),
+                                          decoration: BoxDecoration(
+                                            color: colors.surfaceContainerLow,
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                            border: Border.all(
+                                              color: colors.outlineVariant,
+                                            ),
+                                          ),
+                                          child: Column(
+                                            children: [
+                                              const SizedBox(height: 5),
+                                              Text(
+                                                'Detalle · ±${_length(_precisionRange, widget.centimeters, compact: true)}',
+                                                maxLines: 1,
+                                                overflow: TextOverflow.ellipsis,
+                                                style: theme
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: colors
+                                                          .onSurfaceVariant,
+                                                    ),
+                                              ),
+                                              Expanded(
+                                                child: CustomPaint(
+                                                  key: const ValueKey(
+                                                    'x-precision-bar',
+                                                  ),
+                                                  size: const Size(
+                                                    double.infinity,
+                                                    double.infinity,
+                                                  ),
+                                                  painter: _PositionPainter(
+                                                    actual: ready
+                                                        ? _visualActual
+                                                        : null,
+                                                    target: validTarget
+                                                        ? widget.targetMm
+                                                        : 0,
+                                                    tolerance: validTolerance
+                                                        ? widget.toleranceMm
+                                                        : 0,
+                                                    range: _precisionRange,
+                                                    centimeters:
+                                                        widget.centimeters,
+                                                    colors: colors,
+                                                    successColor: successColor,
+                                                    precision: true,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
                                     ),
                                   ),
-                                  Expanded(
-                                    child: CustomPaint(
-                                      key: const ValueKey('x-precision-bar'),
-                                      size: const Size(
-                                        double.infinity,
-                                        double.infinity,
-                                      ),
-                                      painter: _PositionPainter(
-                                        actual: ready ? _visualActual : null,
-                                        target: validTarget
-                                            ? widget.targetMm
-                                            : 0,
-                                        tolerance: validTolerance
-                                            ? widget.toleranceMm
-                                            : 0,
-                                        range: _precisionRange,
-                                        centimeters: widget.centimeters,
-                                        colors: colors,
-                                        successColor: successColor,
-                                        precision: true,
-                                      ),
-                                    ),
-                                  ),
-                                ],
+                                ),
                               ),
                             ),
-                          ),
+                            Positioned(
+                              left: 0,
+                              right: 0,
+                              top: 92,
+                              height: 88,
+                              child: CustomPaint(
+                                key: const ValueKey('x-position-bar'),
+                                painter: _PositionPainter(
+                                  actual: ready ? _visualActual : null,
+                                  target: validTarget ? widget.targetMm : 0,
+                                  tolerance: validTolerance
+                                      ? widget.toleranceMm
+                                      : 0,
+                                  range: range,
+                                  centimeters: widget.centimeters,
+                                  colors: colors,
+                                  successColor: successColor,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                       SizedBox(
-                        height: 88,
-                        width: double.infinity,
-                        child: CustomPaint(
-                          key: const ValueKey('x-position-bar'),
-                          painter: _PositionPainter(
-                            actual: ready ? _visualActual : null,
-                            target: validTarget ? widget.targetMm : 0,
-                            tolerance: validTolerance ? widget.toleranceMm : 0,
-                            range: range,
-                            centimeters: widget.centimeters,
-                            colors: colors,
-                            successColor: successColor,
+                        height: 16,
+                        child: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                            'Escala ±${_length(range, widget.centimeters, compact: true)}'
+                            ' · tolerancia ${validTolerance ? '±${_length(widget.toleranceMm, widget.centimeters, compact: true)}' : '—'}',
+                            textAlign: TextAlign.center,
+                            style: theme.textTheme.labelSmall?.copyWith(
+                              color: colors.onSurfaceVariant,
+                            ),
                           ),
-                        ),
-                      ),
-                      Text(
-                        'Escala ±${_length(range, widget.centimeters, compact: true)}'
-                        ' · tolerancia ${validTolerance ? '±${_length(widget.toleranceMm, widget.centimeters, compact: true)}' : '—'}',
-                        textAlign: TextAlign.center,
-                        style: theme.textTheme.labelSmall?.copyWith(
-                          color: colors.onSurfaceVariant,
                         ),
                       ),
                     ],
                   );
                 },
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 6),
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
@@ -462,6 +503,8 @@ class _PositionPainter extends CustomPainter {
   final Color successColor;
   final bool precision;
 
+  String tickLabel(double delta) => _length(target + delta, centimeters);
+
   @override
   void paint(Canvas canvas, Size size) {
     if (size.width < 32 || size.height < (precision ? 36 : 70)) return;
@@ -470,7 +513,7 @@ class _PositionPainter extends CustomPainter {
     final double right = size.width - inset;
     final double center = size.width / 2;
     final double halfWidth = (right - left) / 2;
-    final double y = precision ? 20 : 34;
+    final double y = precision ? 17 : 34;
     final double thickness = precision ? 3 : 5;
     final Rect bar = Rect.fromLTRB(left, y - thickness, right, y + thickness);
     final RRect roundedBar = RRect.fromRectAndRadius(
@@ -479,10 +522,13 @@ class _PositionPainter extends CustomPainter {
     );
     canvas.drawRRect(
       roundedBar,
-      Paint()..color = colors.surfaceContainerHighest,
+      Paint()
+        ..color = colors.brightness == Brightness.dark
+            ? const Color(0xff9da9b3)
+            : const Color(0xffd9dee2),
     );
 
-    if (actual != null && tolerance > 0) {
+    if (tolerance > 0) {
       // Exact tolerance-to-scale ratio; never enforce a decorative minimum width.
       final double bandHalfWidth = halfWidth * (tolerance / range);
       final Rect band = Rect.fromLTRB(
@@ -519,8 +565,20 @@ class _PositionPainter extends CustomPainter {
         ..color = successColor
         ..strokeWidth = 1.5,
     );
+    for (int tick = -10; tick <= 10; tick++) {
+      if (tick == 0) continue;
+      final x = center + tick / 10 * halfWidth;
+      canvas.drawLine(
+        Offset(x, y + 9),
+        Offset(x, y + (tick % 5 == 0 ? 15 : 12)),
+        Paint()
+          ..color = colors.outlineVariant
+          ..strokeWidth = 1,
+      );
+    }
     for (int i = -2; i <= 2; i++) {
-      if (precision && i.abs() == 1) continue;
+      // Three absolute labels leave space for thousandths on phone screens.
+      if (i.abs() == 1) continue;
       final double fraction = i / 2;
       final double x = center + fraction * halfWidth;
       canvas.drawLine(
@@ -533,12 +591,12 @@ class _PositionPainter extends CustomPainter {
       final double delta = fraction * range;
       final TextPainter label = TextPainter(
         text: TextSpan(
-          text:
-              '${delta > 0 ? '+' : ''}${_length(delta, centimeters, compact: true)}',
+          text: tickLabel(delta),
           style: TextStyle(
             fontFamily: 'Roboto',
-            fontSize: 10,
-            color: colors.onSurfaceVariant,
+            fontSize: i == 0 ? 11 : 10,
+            fontWeight: i == 0 ? FontWeight.w700 : FontWeight.w400,
+            color: i == 0 ? colors.onSurface : colors.onSurfaceVariant,
           ),
         ),
         textDirection: TextDirection.ltr,
@@ -548,7 +606,7 @@ class _PositionPainter extends CustomPainter {
         canvas,
         Offset(
           (x - label.width / 2).clamp(0, size.width - label.width).toDouble(),
-          y + (precision ? 14 : 27),
+          y + (precision ? 12 : 27),
         ),
       );
       label.dispose();
@@ -561,6 +619,15 @@ class _PositionPainter extends CustomPainter {
     final Paint marker = Paint()
       ..color = Colors.black
       ..strokeWidth = 2.5;
+    // A pale keyline keeps the black sensor marker legible in the dark theme.
+    canvas.drawLine(
+      Offset(x, y - 14),
+      Offset(x, y + 13),
+      Paint()
+        ..color = colors.surface
+        ..strokeWidth = 5
+        ..strokeCap = StrokeCap.round,
+    );
     canvas.drawLine(Offset(x, y - 14), Offset(x, y + 13), marker);
     final Path triangle = Path();
     if (relative.abs() > 1) {
@@ -587,4 +654,55 @@ class _PositionPainter extends CustomPainter {
       colors != oldDelegate.colors ||
       successColor != oldDelegate.successColor ||
       precision != oldDelegate.precision;
+}
+
+/// A magnifier funnel: its narrow end is the actual detail interval on the
+/// main scale, not a decorative point unrelated to the ruler's current zoom.
+class _ZoomConnectorPainter extends CustomPainter {
+  const _ZoomConnectorPainter({
+    required this.range,
+    required this.detailRange,
+    required this.colors,
+  });
+  final double range, detailRange;
+  final ColorScheme colors;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = size.width / 2;
+    final halfTrack = center - math.min(36, size.width * .12);
+    final focus = halfTrack * (detailRange / range).clamp(0.0, 1.0);
+    final lensHalf = math.max(0.0, center - 30);
+    final funnel = Path()
+      ..moveTo(center - lensHalf, 78)
+      ..cubicTo(center - lensHalf, 91, center - focus, 99, center - focus, 112)
+      ..lineTo(center - focus, 123)
+      ..lineTo(center + focus, 123)
+      ..lineTo(center + focus, 112)
+      ..cubicTo(
+        center + focus,
+        99,
+        center + lensHalf,
+        91,
+        center + lensHalf,
+        78,
+      );
+    canvas.drawPath(
+      funnel,
+      Paint()..color = colors.primary.withValues(alpha: .035),
+    );
+    canvas.drawPath(
+      funnel,
+      Paint()
+        ..color = colors.primary.withValues(alpha: .35)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _ZoomConnectorPainter oldDelegate) =>
+      range != oldDelegate.range ||
+      detailRange != oldDelegate.detailRange ||
+      colors != oldDelegate.colors;
 }

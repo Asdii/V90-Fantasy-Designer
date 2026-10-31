@@ -35,7 +35,7 @@ flutter build apk --release
 
 Las compilaciones locales sin variables de firma usan la clave de desarrollo de
 este equipo. GitHub Actions exige la misma identidad guardada como secretos y
-publica un APK por push a `main`. La app incluye **Configuración → Actualizaciones**.
+publica un APK por push a `main`. La app incluye **Configuración → Datos → Actualizaciones**.
 Consulta la [configuración inicial y guía de actualización](../docs/microfantasy-updates.md).
 No cambies el identificador ni la firma de una app ya distribuida sin planificar la migración.
 
@@ -61,7 +61,15 @@ El primer inicio abre **Hexágono de práctica**, con Modo simulación activado.
 6. Regresa a Corte: con dos o más puntos se activa la compensación.
 7. Cierra y vuelve a abrir: se recuperan trabajo, paso, preferencias, calibración y último trabajo pendiente.
 
-La simulación conserva la lectura manual y continúa publicándola; no caduca por dejar quieto el slider. La etiqueta Simulación permanece visible en Corte.
+La simulación conserva la lectura manual y continúa publicándola; no caduca por dejar quieto el slider. El icono de simulación del encabezado identifica este modo.
+
+## Vista de corte y apariencia
+
+Corte adapta el tamaño del dibujo al alto disponible; la regla X y los botones de paso permanecen visibles sin desplazar la pantalla. El Cut Helper tiene fondo transparente y puede ampliarse con el botón de la esquina del diagrama.
+
+La regla muestra posiciones X absolutas: la etiqueta central es siempre el **objetivo corregido** del paso. El cambio de escala interpola la magnificación y la línea del sensor se anima en todos los modos de respuesta visual. Las cifras, el estado de tolerancia y la calibración siguen utilizando la lectura original, sin suavizado. Al acercarse aparece una lupa con conectores al intervalo exacto de la regla principal.
+
+Configuración se organiza como Máquina, V90 Fantasy Designer, Preferencias, Temas, Datos y Opciones avanzadas. Los temas persistentes son **Atelier, Lagoon, Porcelain, Amethyst, Sunstone, Arctic y Midnight** (oscuro). El verde continúa reservado para confirmar la posición.
 
 ## Calibración y coordenadas
 
@@ -73,7 +81,7 @@ Todos los datos se almacenan en **mm**. La opción cm sólo modifica las etiquet
 - Ángulos por defecto: 0, 30, …, 330°. Configurables en Preferencias.
 - Se conservan sólo puntos realmente medidos. Una calibración vacía o con un único punto de referencia aún no activa la compensación del trabajo.
 - Con dos o más puntos se interpola linealmente entre vecinos, incluido el intervalo que cruza 360°/0°. No se extrapola una tendencia fuera de esos vecinos.
-- El mapa representa **offset X frente a R**. Cada punto se desplaza sólo horizontalmente desde su marca ideal; no se conectan los puntos con curvas ni se calcula una desviación Y.
+- El mapa representa **offset X frente a R**. Cada punto se desplaza sólo horizontalmente desde su marca ideal; al completar todos los ángulos, se unen con segmentos en una silueta de offset X, sin calcular una desviación Y.
 - Hay una única calibración, aplicada y guardada al capturar cada punto. Al actualizar se conserva la antigua calibración activa; si había varios perfiles se archivan localmente antes de consolidar. La inversión de X de instalaciones anteriores se respeta, sin selector en la interfaz.
 - El suavizado afecta exclusivamente al marcador visual; guardar calibración, comprobar tolerancia y calcular objetivos utiliza lecturas originales, sin filtrar.
 - Una lectura ausente, desconectada o caducada no da confirmación de posición.
@@ -208,7 +216,7 @@ Referencias de implementación: [red en Flutter](https://docs.flutter.dev/data-a
 
 ## Apariencia y guía X
 
-Preferencias ofrece cuatro temas claros, guardados localmente. El encabezado y
+Temas ofrece seis apariencias claras y Midnight oscuro, guardados localmente. El encabezado y
 los iconos Android/iOS usan el mismo dibujo vectorial de micromotor con gema.
 Para regenerar los tamaños del icono: `flutter test tool/generate_app_icons.dart`.
 

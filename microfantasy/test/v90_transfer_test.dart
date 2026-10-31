@@ -97,8 +97,8 @@ void main() {
       await tester.pumpWidget(MicroFantasyApp(controller: c));
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.byType(V90CutHelper), findsOneWidget);
-      await tester.ensureVisible(find.text('Abrir Cut Helper'));
-      await tester.tap(find.text('Abrir Cut Helper'));
+      await tester.ensureVisible(find.byTooltip('Abrir Cut Helper'));
+      await tester.tap(find.byTooltip('Abrir Cut Helper'));
       await tester.pump(const Duration(milliseconds: 500));
       expect(find.text('Operación 2 · Faceta de referencia 7'), findsOneWidget);
       await tester.tap(find.text('Horizontal →'));

@@ -61,10 +61,6 @@ class _HelperPainter extends CustomPainter {
     final scale = math.min(size.width, size.height) / (2 * data.extent);
     if (scale <= 0) return;
     final r = data.wheelRadius, hair = data.hairline;
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = const Color(0xfff7f9fb),
-    );
     canvas.save();
     canvas.translate(size.width / 2, size.height / 2);
     canvas.scale(scale);
@@ -114,8 +110,13 @@ class _HelperPainter extends CustomPainter {
         );
       }
     }
+    canvas.save();
+    canvas.clipPath(
+      Path()..addOval(Rect.fromCircle(center: Offset.zero, radius: r)),
+    );
     _axis(canvas, true, scale);
     _axis(canvas, false, scale);
+    canvas.restore();
     final facet = Path()..addPolygon(data.boundary.map(point).toList(), true);
     canvas.drawPath(
       facet,

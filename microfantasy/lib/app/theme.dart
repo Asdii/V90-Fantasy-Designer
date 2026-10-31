@@ -6,7 +6,7 @@ const ink = Color(0xff17334b);
 const blue = Color(0xff187ba9);
 const pale = Color(0xfff4f8fb);
 
-/// All appearances are light; green is reserved for successful machine states.
+/// Green stays reserved for measurement success in every appearance.
 ThemeData microTheme([AppearanceTheme appearance = AppearanceTheme.atelier]) {
   final (
     primary,
@@ -17,52 +17,78 @@ ThemeData microTheme([AppearanceTheme appearance = AppearanceTheme.atelier]) {
     muted,
   ) = switch (appearance) {
     AppearanceTheme.atelier => (
-      const Color(0xff315b78),
-      const Color(0xff805b49),
-      const Color(0xfff6f4ef),
+      const Color(0xff174f79),
+      const Color(0xffa25e32),
+      const Color(0xfff1e9da),
       const Color(0xfffffdf8),
       const Color(0xff263742),
       const Color(0xff59656c),
     ),
     AppearanceTheme.lagoon => (
-      const Color(0xff14688b),
-      const Color(0xff536484),
-      const Color(0xfff0f6fa),
+      const Color(0xff006c9c),
+      const Color(0xff2363aa),
+      const Color(0xffdfedf7),
       const Color(0xfffbfdff),
       const Color(0xff193747),
       const Color(0xff516674),
     ),
     AppearanceTheme.porcelain => (
-      const Color(0xff4d5b70),
-      const Color(0xff77606a),
-      const Color(0xfff3f4f6),
+      const Color(0xff344f76),
+      const Color(0xff9c5976),
+      const Color(0xffe9edf3),
       const Color(0xffffffff),
       const Color(0xff29313d),
       const Color(0xff606773),
     ),
     AppearanceTheme.amethyst => (
-      const Color(0xff705394),
-      const Color(0xff805c72),
-      const Color(0xfff7f3fa),
+      const Color(0xff683da0),
+      const Color(0xff9d507d),
+      const Color(0xffeee2f9),
       const Color(0xfffffbff),
       const Color(0xff382d46),
       const Color(0xff6e6178),
     ),
+    AppearanceTheme.sunstone => (
+      const Color(0xff965c18),
+      const Color(0xff486d95),
+      const Color(0xfff7e8cd),
+      const Color(0xfffffaf0),
+      const Color(0xff453522),
+      const Color(0xff72604b),
+    ),
+    AppearanceTheme.arctic => (
+      const Color(0xff1455ba),
+      const Color(0xff744dab),
+      const Color(0xffe1e9fc),
+      const Color(0xfff8faff),
+      const Color(0xff1c3157),
+      const Color(0xff526682),
+    ),
+    AppearanceTheme.midnight => (
+      const Color(0xff7dbfff),
+      const Color(0xffbc9bea),
+      const Color(0xff101c30),
+      const Color(0xff1b2c45),
+      const Color(0xffe8f1ff),
+      const Color(0xffb2c3dc),
+    ),
   };
+  final dark = appearance == AppearanceTheme.midnight;
+  final onAccent = dark ? const Color(0xff0e223b) : Colors.white;
   Color tint(Color color, double opacity) =>
       Color.alphaBlend(color.withValues(alpha: opacity), surface);
   final colors = ColorScheme(
-    brightness: Brightness.light,
+    brightness: dark ? Brightness.dark : Brightness.light,
     primary: primary,
-    onPrimary: Colors.white,
-    primaryContainer: tint(primary, .12),
+    onPrimary: onAccent,
+    primaryContainer: tint(primary, dark ? .16 : .15),
     onPrimaryContainer: primary,
     primaryFixed: tint(primary, .12),
     primaryFixedDim: tint(primary, .22),
     onPrimaryFixed: text,
     onPrimaryFixedVariant: primary,
     secondary: secondary,
-    onSecondary: Colors.white,
+    onSecondary: onAccent,
     secondaryContainer: tint(secondary, .12),
     onSecondaryContainer: secondary,
     secondaryFixed: tint(secondary, .12),
@@ -70,15 +96,15 @@ ThemeData microTheme([AppearanceTheme appearance = AppearanceTheme.atelier]) {
     onSecondaryFixed: text,
     onSecondaryFixedVariant: secondary,
     tertiary: secondary,
-    onTertiary: Colors.white,
+    onTertiary: onAccent,
     tertiaryContainer: tint(secondary, .12),
     onTertiaryContainer: secondary,
     tertiaryFixed: tint(secondary, .12),
     tertiaryFixedDim: tint(secondary, .22),
     onTertiaryFixed: text,
     onTertiaryFixedVariant: secondary,
-    error: const Color(0xffab3734),
-    onError: Colors.white,
+    error: dark ? const Color(0xffffb4ab) : const Color(0xffab3734),
+    onError: dark ? const Color(0xff601410) : Colors.white,
     errorContainer: const Color(0xffffdad6),
     onErrorContainer: const Color(0xff410002),
     surface: surface,
@@ -154,7 +180,7 @@ ThemeData microTheme([AppearanceTheme appearance = AppearanceTheme.atelier]) {
   );
   return ThemeData(
     useMaterial3: true,
-    brightness: Brightness.light,
+    brightness: dark ? Brightness.dark : Brightness.light,
     colorScheme: colors,
     scaffoldBackgroundColor: background,
     canvasColor: surface,
