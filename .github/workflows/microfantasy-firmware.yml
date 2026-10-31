@@ -27,5 +27,9 @@ jobs:
         run: |
           g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/position_test.cpp -o /tmp/position-test
           /tmp/position-test
+      - name: Test Wi-Fi provisioning recovery
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_setup_test.cpp -o /tmp/wifi-setup-test
+          /tmp/wifi-setup-test
       - name: Build XIAO ESP32-C3 firmware
         run: pio run -d firmware/microfantasy-xiao -e xiao_esp32c3

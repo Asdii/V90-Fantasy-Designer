@@ -55,13 +55,18 @@ arduinoWebSockets 2.7.1, ArduinoJson 7.4.2. No se usa OTA en esta primera versi�
    Configurar Wi-Fi de la máquina**, abre los ajustes Wi-Fi y conéctate a esa red.
    Acepta permanecer conectado aunque Android avise que no hay Internet. En iOS,
    abre Ajustes → Wi-Fi manualmente y regresa a la app.
-3. Toca **Ya estoy conectado: comprobar**, introduce SSID y contraseña de la red
-   doméstica **2.4 GHz** y pulsa **Guardar Wi-Fi en la máquina**.
-4. La máquina prueba la conexión durante hasta 20 s. Solo guarda las credenciales
-   si se conecta. Si falla, la red de configuración permanece abierta para
-   reintentar; las credenciales anteriores se conservan.
+3. Toca **Ya estoy conectado: comprobar**. La máquina busca redes y la app muestra
+   sus nombres: elige tu Wi-Fi, introduce su contraseña y pulsa **Guardar Wi-Fi en
+   la máquina**. Si tu router usa un único nombre para varias bandas, elige ese
+   mismo nombre. No hace falta separar bandas ni entrar al router. **Escribir
+   nombre** permite configurar una red oculta.
+4. La máquina busca la señal compatible y realiza hasta tres intentos automáticos
+   de 25 s, con pausas entre ellos. La app muestra el progreso y tolera las pausas
+   del AP al cambiar de canal. Solo guarda cuando obtiene una IP en la red elegida.
+   Si falla, la red de configuración permanece disponible para reintentar; las
+   credenciales anteriores se conservan.
 5. Tras la confirmación, vuelve al Wi-Fi de casa y pulsa **Terminar**. La app guarda
-   la IP confirmada, usa puerto 81 y sale de simulación. El AP se cierra 15 s
+   la IP confirmada, usa puerto 81 y sale de simulación. El AP se cierra 60 s
    después de conectar. No es necesario usarlo en cada encendido.
 
 El dispositivo anuncia `fantasy-machine.local` y `_fantasy-machine._tcp:81`.
@@ -70,6 +75,20 @@ Después de 60 s sin red, abre de nuevo su AP protegido, pero sigue intentando
 reconectar. BOOT (3 s después del arranque) también reabre el asistente sin borrar
 la configuración ni resetear el contador. Solo un dispositivo debería utilizar
 ese hostname en la misma LAN en esta primera versión.
+
+**Esta mejora requiere actualizar firmware y app.** La app sigue permitiendo
+introducir el nombre manualmente con firmware anterior, pero no puede añadirle
+las capacidades de búsqueda/reintento por sí sola.
+
+El firmware usa escaneo asíncrono, selección por señal, dos intentos dirigidos a
+los AP de 2.4 GHz encontrados y un último intento sin fijar BSSID. En redes WPA3
+habilita SAE H2E y hunting-and-pecking (`WPA3_SAE_PWE_BOTH`); conserva PMF opcional
+y el mínimo WPA2 para redes protegidas. No modifica ninguna configuración del
+router. El C3 no puede conectarse a una red exclusivamente 5/6 GHz, ni este
+asistente de contraseña configura redes Enterprise. Los nombres listados son
+redes personales/abiertas visibles para su radio. La compatibilidad con un
+router concreto debe verificarse con hardware; los reintentos no garantizan que
+un AP que rechaza clientes vaya a aceptarlos.
 
 ## Medición
 
@@ -139,6 +158,18 @@ Disponible únicamente desde la interfaz AP, no desde la red doméstica:
 - `POST` al mismo endpoint: `{"ssid":"...","password":"..."}`. Responde
   `202 {"accepted":true}` antes de intentar conectar. La app consulta GET
   hasta confirmar `connected: true`, o informa el fallo.
+- `POST /api/v1/setup/networks`: inicia búsqueda asíncrona; responde `202`.
+  `GET` al mismo endpoint devuelve `device`, `schemaVersion`, `scanning`, `error`
+  y `networks: [{"ssid":"Casa","rssi":-43,"secured":true}]` (máximo 24 nombres).
+  Las credenciales y los BSSID no aparecen en esta respuesta.
+- El estado añade `scan_supported`, `phase`, `attempt`, `max_attempts` y
+  `reason_code` sin romper clientes v1. Fases: `preparing`, `scanning`, `retrying`,
+  `connecting`, `getting_address`, `connected`, `failed`.
+- Los fallos distinguen `network_not_found`, `authentication_failed`,
+  `association_failed`, `address_timeout`, `signal_lost`, `connection_timeout`
+  y `storage_error`. Un fallo de autenticación no demuestra por sí solo que la
+  contraseña sea incorrecta. Serial registra el motivo numérico/nombre del SDK;
+  no es necesario interpretar estos códigos para utilizar la app.
 - `400`: campos inválidos; `403`: fuera del AP; `409`: otro intento en curso.
 - Nunca devuelve ni registra la contraseña doméstica. La app no la persiste.
 
@@ -149,11 +180,13 @@ No exponer puertos 80/81 a Internet. NVS no está cifrada en esta primera versi�
 ## Pruebas
 
 El workflow `Check MicroFantasy firmware` compila para el XIAO y ejecuta pruebas
-de matemática del contador. En Linux/macOS:
+de matemática del contador y recuperación de configuración Wi-Fi. En Linux/macOS:
 
 ```sh
 c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/position_test.cpp -o /tmp/position-test
 /tmp/position-test
+c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_setup_test.cpp -o /tmp/wifi-setup-test
+/tmp/wifi-setup-test
 ```
 
 Las pruebas móviles cubren validación de credenciales, HTTP real contra un
@@ -166,6 +199,9 @@ de telemetría y reconexión WebSocket. No sustituyen la prueba eléctrica:
 4. Déjalo quieto: llegan datos a 25 Hz sin error por inactividad.
 5. Apaga/enciende: recupera Wi-Fi y dirección; X vuelve a la referencia de arranque.
 6. Prueba contraseña incorrecta, recuperación de red y reconexión de la app.
+7. Con un SSID unificado, selecciona la red desde la lista, espera confirmación,
+   reinicia el ESP32 y comprueba la reconexión. Verifica también interrupción
+   temporal del AP, reintentos, fallo DHCP y conservación de la red anterior.
 
 La velocidad máxima real y la pérdida de pulsos bajo carga deben medirse con
 hardware. Esta implementación por ISR no promete los 650 mm/s máximos del chip.
@@ -176,6 +212,7 @@ hardware. Esta implementación por ISR no promete los 650 mm/s máximos del chip
 - [XIAO ESP32-C3](https://wiki.seeedstudio.com/XIAO_ESP32C3_Getting_Started/)
 - [PlatformIO XIAO ESP32-C3](https://docs.platformio.org/en/latest/boards/espressif32/seeed_xiao_esp32c3.html)
 - [Espressif Wi-Fi API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/wifi.html)
+- [WPA3 / SAE en ESP-IDF 4.4.8](https://docs.espressif.com/projects/esp-idf/en/v4.4.8/esp32c3/api-guides/wifi-security.html)
 - [arduinoWebSockets](https://github.com/Links2004/arduinoWebSockets)
 
 

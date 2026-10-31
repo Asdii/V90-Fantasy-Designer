@@ -7,6 +7,14 @@ separate from telemetry, to configure the first-boot AP. The password is never
 stored by the app. Join its Wi-Fi once through the phone's system settings;
 after setup use the home LAN, port 81, path `/ws` and `_fantasy-machine._tcp`.
 
+Provisioning v1 advertises optional `scan_supported` in its status. New firmware
+supports `POST /api/v1/setup/networks` to start a scan and `GET` to poll
+`{device, schemaVersion, scanning, error, networks:[{ssid,rssi,secured}]}`.
+Old firmware retains manual SSID entry. Connection progress exposes `phase`,
+`attempt`, `max_attempts`, `reason_code`; the app waits up to 110 s for scanning
+and three automatic firmware attempts, surviving temporary AP channel changes.
+Only a confirmed connection without a storage error is shown as saved.
+
 Parent app dependency: `nsd: ^4.1.0` (installed). The implementation uses the
 startDiscovery/stopDiscovery API also in current 5.0.1 pub.dev docs (checked 2026-10-30).
 

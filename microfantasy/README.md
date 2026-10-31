@@ -186,9 +186,17 @@ Para conectar hardware: implementa ese WebSocket en el firmware, anuncia el serv
 
 En **Configuración → Máquina → Configurar Wi-Fi de la máquina**, conecta el
 teléfono a `MicroFantasy-…` (contraseña `fantasy123`) y comprueba la conexión.
-Envía el nombre y contraseña del Wi-Fi doméstico de 2.4 GHz. El ESP32 guarda
+Elige tu Wi-Fi de la lista detectada por la máquina e introduce su contraseña.
+También puedes escribir el nombre de una red oculta. No necesitas separar las
+bandas ni configurar el router: un Wi-Fi con nombre unificado se elige por su
+nombre habitual. El ESP32 selecciona su señal compatible automáticamente y
+reintenta hasta tres veces; la app muestra el progreso. El ESP32 guarda
 las credenciales en NVS únicamente cuando la conexión funciona; permanecen
 guardadas después de apagarlo. Espera la confirmación y vuelve al Wi-Fi de casa.
+Esta búsqueda y los reintentos requieren actualizar también el firmware por USB;
+con firmware anterior sigue disponible la entrada manual. La app distingue falta
+de señal, rechazo de conexión, falta de IP y fallo al guardar, sin atribuir todos
+los problemas a la contraseña. El C3 sigue siendo un dispositivo de 2.4 GHz.
 
 La petición usa JSON UTF-8 con `Content-Length` en bytes explícito. El
 [WebServer de Arduino-ESP32 2.0.17](https://github.com/espressif/arduino-esp32/blob/2.0.17/libraries/WebServer/src/Parsing.cpp)
@@ -196,7 +204,7 @@ necesita esa longitud para leer el cuerpo y no decodifica peticiones chunked.
 Sin establecerla, [HttpClientRequest](https://api.dart.dev/dart-io/HttpClientRequest/contentLength.html)
 usa longitud desconocida, y la versión anterior de la app podía comprobar la
 máquina pero fallar al enviar las credenciales. Se corrige actualizando la app;
-no requiere cambiar el firmware ni borrar la memoria del ESP32.
+esa corrección de transporte no requiere borrar la memoria del ESP32.
 
 Los rechazos HTTP 400 (datos), 403 (fuera de la red de configuración) y 409
 (intento en curso) se distinguen de los fallos de transporte. La confirmación

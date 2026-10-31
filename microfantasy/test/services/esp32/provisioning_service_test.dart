@@ -5,6 +5,125 @@ import 'package:microfantasy/services/esp32/provisioning_service.dart';
 import 'package:microfantasy/services/esp32/esp32_protocol.dart';
 
 void main() {
+  test(
+    'scan API returns nearby networks without exposing credentials or BSSIDs',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() => server.close(force: true));
+      var started = false;
+      server.listen((request) async {
+        expect(request.uri.path, '/api/v1/setup/networks');
+        if (request.method == 'POST') {
+          expect(request.headers.chunkedTransferEncoding, false);
+          await request.drain<void>();
+          started = true;
+          request.response.statusCode = 202;
+          request.response.write('{"accepted":true}');
+        } else {
+          request.response.write(
+            jsonEncode({
+              'device': 'MicroFantasy',
+              'schemaVersion': 1,
+              'scanning': false,
+              'error': '',
+              'networks': [
+                {'ssid': 'Casa Wi-Fi 6', 'rssi': -43, 'secured': true},
+              ],
+            }),
+          );
+        }
+        await request.response.close();
+      });
+      final service = HttpMachineProvisioningService(
+        endpoint: Uri.parse('http://127.0.0.1:${server.port}/api/v1/setup'),
+      );
+      await service.startScan();
+      final result = await service.networks();
+      expect(started, true);
+      expect(result.scanning, false);
+      expect(result.networks.single.ssid, 'Casa Wi-Fi 6');
+      expect(result.networks.single.secured, true);
+    },
+  );
+
+  test(
+    'old firmware remains usable and new progress identifies connection phases',
+    () {
+      final base = <String, dynamic>{
+        'device': 'MicroFantasy',
+        'schemaVersion': 1,
+        'connected': false,
+        'connecting': true,
+        'error': '',
+        'ip': '0.0.0.0',
+      };
+      expect(MachineSetupStatus.fromJson(base).scanSupported, false);
+      final updated = MachineSetupStatus.fromJson({
+        ...base,
+        'scan_supported': true,
+        'phase': 'getting_address',
+        'attempt': 2,
+        'max_attempts': 3,
+        'reason_code': 0,
+      });
+      expect(updated.scanSupported, true);
+      expect(updated.attempt, 2);
+      expect(updated.progressMessage, contains('Esperando la dirección'));
+      expect(
+        () => MachineSetupStatus.fromJson({...base, 'attempt': 'bad'}),
+        throwsFormatException,
+      );
+      expect(
+        () => MachineSetupStatus.fromJson({...base, 'scan_supported': 1}),
+        throwsFormatException,
+      );
+      for (final code in [
+        'network_not_found',
+        'authentication_failed',
+        'address_timeout',
+        'signal_lost',
+      ]) {
+        final status = MachineSetupStatus.fromJson({...base, 'error': code});
+        expect(status.errorMessage, isNot(contains('2.4 GHz')));
+        expect(
+          status.errorMessage,
+          isNot(contains('configuración del router')),
+        );
+      }
+      expect(
+        MachineSetupStatus.fromJson({
+          ...base,
+          'error': 'address_timeout',
+        }).errorMessage,
+        isNot(contains('contraseña')),
+      );
+    },
+  );
+
+  test('malformed or unbounded scan lists are rejected', () {
+    final base = <String, dynamic>{
+      'device': 'MicroFantasy',
+      'schemaVersion': 1,
+      'scanning': false,
+      'error': '',
+    };
+    final valid = {'ssid': 'Home', 'rssi': -40, 'secured': true};
+    for (final items in [
+      List.filled(25, valid),
+      [
+        {'ssid': '', 'rssi': -40, 'secured': true},
+      ],
+      [
+        {'ssid': 'x', 'rssi': 'bad', 'secured': true},
+      ],
+    ]) {
+      expect(
+        () => MachineWifiScan.fromJson({...base, 'networks': items}),
+        throwsFormatException,
+      );
+    }
+  });
+
   test('Wi-Fi payload preserves spaces and validates byte limits', () {
     expect(jsonDecode(setupPayload('Mi red ', ' pass word ')), {
       'ssid': 'Mi red ',

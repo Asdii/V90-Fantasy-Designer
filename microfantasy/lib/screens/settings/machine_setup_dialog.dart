@@ -15,6 +15,9 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
   final ssid = TextEditingController();
   final password = TextEditingController();
   bool busy = false, found = false;
+  bool scanSupported = false, manualNetwork = true;
+  List<MachineWifiNetwork> networks = const [];
+  String? selectedNetwork;
   String message = '';
   String? connectedIp;
 
@@ -30,10 +33,18 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
       if (!mounted) return;
       setState(() {
         found = true;
-        message =
-            'Máquina encontrada. Introduce el Wi-Fi de tu casa (2.4 GHz).';
-        if (status.connected) connectedIp = status.ip;
+        scanSupported = status.scanSupported;
+        message = 'Máquina encontrada. Elige el Wi-Fi de tu casa.';
+        if (status.connected) {
+          connectedIp = status.ip;
+          message = 'Wi-Fi guardado en la máquina.';
+        }
       });
+      if (status.connecting) {
+        await waitForConnection();
+      } else if (!status.connected && status.scanSupported) {
+        await scanNetworks();
+      }
     } on MachineSetupRequestException catch (error) {
       if (mounted) setState(() => message = error.message);
     } catch (_) {
@@ -45,6 +56,100 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
       }
     } finally {
       if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> scanNetworks() async {
+    setState(() {
+      busy = true;
+      message = 'Buscando redes desde la máquina…';
+    });
+    try {
+      await widget.service.startScan();
+      final deadline = DateTime.now().add(const Duration(seconds: 20));
+      while (mounted && DateTime.now().isBefore(deadline)) {
+        await Future<void>.delayed(const Duration(milliseconds: 750));
+        if (!mounted) return;
+        MachineWifiScan result;
+        try {
+          result = await widget.service.networks();
+        } catch (_) {
+          continue;
+        } // The AP can briefly pause during a radio scan.
+        if (!mounted) return;
+        if (result.scanning) continue;
+        setState(() {
+          networks = result.networks;
+          selectedNetwork = networks.any((n) => n.ssid == ssid.text)
+              ? ssid.text
+              : null;
+          manualNetwork = networks.isEmpty;
+          message = networks.isEmpty
+              ? 'No se encontraron redes. Acerca la máquina al router y vuelve a buscar, o escribe el nombre de tu red.'
+              : 'Elige tu Wi-Fi. La máquina selecciona automáticamente la señal compatible.';
+        });
+        return;
+      }
+      if (mounted) {
+        setState(() {
+          manualNetwork = true;
+          message =
+              'No se pudo completar la búsqueda. Puedes repetirla o escribir el nombre de tu red.';
+        });
+      }
+    } on MachineSetupRequestException catch (error) {
+      if (mounted) {
+        setState(() {
+          message = error.message;
+          manualNetwork = true;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          manualNetwork = true;
+          message =
+              'No se pudo buscar. Comprueba que sigues en MicroFantasy-….';
+        });
+      }
+    } finally {
+      if (mounted) setState(() => busy = false);
+    }
+  }
+
+  Future<void> waitForConnection() async {
+    // Firmware: scan + three 25 s attempts + backoff. Allow AP channel changes
+    // without incorrectly treating a transient HTTP timeout as bad credentials.
+    final deadline = DateTime.now().add(const Duration(seconds: 110));
+    while (mounted && DateTime.now().isBefore(deadline)) {
+      await Future<void>.delayed(const Duration(seconds: 1));
+      if (!mounted) return;
+      MachineSetupStatus status;
+      try {
+        status = await widget.service.status();
+      } catch (_) {
+        continue;
+      }
+      if (!mounted) return;
+      if (status.error.isNotEmpty) {
+        setState(() => message = status.errorMessage);
+        return;
+      }
+      if (status.connected) {
+        password.clear();
+        setState(() {
+          connectedIp = status.ip;
+          message = 'Wi-Fi guardado en la máquina.';
+        });
+        return;
+      }
+      setState(() => message = status.progressMessage);
+    }
+    if (mounted) {
+      setState(
+        () => message =
+            'No se pudo confirmar la conexión. Vuelve a comprobar la máquina; si ya volvió a la red de casa, usa Buscar máquina.',
+      );
     }
   }
 
@@ -61,40 +166,7 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
     });
     try {
       await widget.service.configure(ssid.text, password.text);
-      password.clear();
-      final deadline = DateTime.now().add(const Duration(seconds: 40));
-      while (mounted && DateTime.now().isBefore(deadline)) {
-        await Future<void>.delayed(const Duration(seconds: 1));
-        if (!mounted) return;
-        MachineSetupStatus status;
-        try {
-          status = await widget.service.status();
-        } catch (_) {
-          continue;
-        } // AP may briefly change channel when STA joins.
-        if (!mounted) return;
-        if (status.error.isNotEmpty) {
-          setState(
-            () => message = status.error == 'storage_error'
-                ? 'No se pudo guardar en la máquina. Reiníciala y vuelve a intentar.'
-                : 'No se pudo conectar. Revisa la contraseña y que la red sea de 2.4 GHz.',
-          );
-          return;
-        }
-        if (status.connected) {
-          setState(() {
-            connectedIp = status.ip;
-            message = 'Wi-Fi guardado en la máquina.';
-          });
-          return;
-        }
-      }
-      if (mounted) {
-        setState(
-          () => message =
-              'No se pudo confirmar la conexión. Vuelve a comprobar la máquina; si ya volvió a la red de casa, usa Buscar máquina.',
-        );
-      }
+      await waitForConnection();
     } on MachineSetupRequestException catch (error) {
       if (mounted) setState(() => message = error.message);
     } catch (_) {
@@ -127,7 +199,7 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             const Text(
-              '1. Enciende la máquina.\n2. En los ajustes Wi-Fi del celular, conéctate a MicroFantasy-… con la password fantasy123.\n3. Regresa aquí. Este paso solo es necesario la primera vez o al cambiar de red.',
+              '1. Enciende la máquina.\n2. En los ajustes Wi-Fi del celular, conéctate a MicroFantasy-… con la contraseña fantasy123.\n3. Regresa aquí para elegir tu red de casa. Solo necesitas hacerlo la primera vez o al cambiar de red.',
             ),
             if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android)
               TextButton.icon(
@@ -154,14 +226,68 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
             ),
             if (found && connectedIp == null) ...[
               const SizedBox(height: 12),
-              TextField(
-                controller: ssid,
-                decoration: const InputDecoration(
-                  labelText: 'Nombre del Wi-Fi de casa',
+              if (scanSupported && networks.isNotEmpty && !manualNetwork)
+                DropdownButtonFormField<String>(
+                  key: ValueKey(networks),
+                  initialValue: selectedNetwork,
+                  isExpanded: true,
+                  decoration: const InputDecoration(labelText: 'Wi-Fi de casa'),
+                  hint: const Text('Elige tu red'),
+                  items: networks
+                      .map(
+                        (n) => DropdownMenuItem(
+                          value: n.ssid,
+                          child: Text(n.ssid, overflow: TextOverflow.ellipsis),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: busy
+                      ? null
+                      : (value) => setState(() {
+                          selectedNetwork = value;
+                          ssid.text = value ?? '';
+                          password.clear();
+                        }),
                 ),
-                autocorrect: false,
-                enabled: !busy,
-              ),
+              if (manualNetwork)
+                TextField(
+                  controller: ssid,
+                  decoration: const InputDecoration(
+                    labelText: 'Nombre del Wi-Fi de casa',
+                  ),
+                  autocorrect: false,
+                  enabled: !busy,
+                ),
+              if (scanSupported)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    TextButton.icon(
+                      onPressed: busy ? null : scanNetworks,
+                      icon: const Icon(Icons.refresh),
+                      label: const Text('Buscar redes'),
+                    ),
+                    if (networks.isNotEmpty)
+                      TextButton(
+                        onPressed: busy
+                            ? null
+                            : () => setState(() {
+                                manualNetwork = !manualNetwork;
+                                if (!manualNetwork) {
+                                  selectedNetwork =
+                                      networks.any((n) => n.ssid == ssid.text)
+                                      ? ssid.text
+                                      : null;
+                                }
+                              }),
+                        child: Text(
+                          manualNetwork
+                              ? 'Elegir de la lista'
+                              : 'Escribir nombre',
+                        ),
+                      ),
+                  ],
+                ),
               const SizedBox(height: 12),
               TextField(
                 controller: password,
@@ -175,7 +301,9 @@ class _MachineSetupDialogState extends State<MachineSetupDialog> {
               ),
               const SizedBox(height: 12),
               FilledButton(
-                onPressed: busy ? null : save,
+                onPressed: busy || (!manualNetwork && selectedNetwork == null)
+                    ? null
+                    : save,
                 child: const Text('Guardar Wi-Fi en la máquina'),
               ),
             ],

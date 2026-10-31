@@ -1,6 +1,7 @@
 #include "MachineNetwork.h"
 #include "Encoder.h"
 #include "PositionMath.h"
+#include "WifiProvisioning.h"
 #include <WiFi.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
@@ -12,9 +13,8 @@ WebServer http(80);
 WebSocketsServer ws(81);
 Configuration* config;
 int64_t zero = 0;
-bool ap = false, pending = false, trial = false, connectedBefore = false, mdns = false;
+bool ap = false, connectedBefore = false, mdns = false;
 uint32_t attemptAt = 0, lostAt = 0, closeApAt = 0, lastFrame = 0, lastStatus = 0;
-String candidateSsid, candidatePassword, setupError;
 
 void reply(int code, const JsonDocument& doc) {
     String body;
@@ -77,22 +77,10 @@ void command(uint8_t client, uint8_t* payload, size_t length) {
 }
 
 void connectionTick(uint32_t now) {
-    if (pending) {
-        pending = false; trial = true; attemptAt = now; closeApAt = 0;
-        WiFi.disconnect(false, false);
-        WiFi.begin(candidateSsid.c_str(), candidatePassword.c_str());
-        connectedBefore = false;
-    }
+    WifiProvisioning::tick(now);
+    if (WifiProvisioning::busy()) { attemptAt = now; closeApAt = 0; }
     const bool connected = WiFi.status() == WL_CONNECTED;
     if (connected && !connectedBefore) {
-        if (trial) {
-            Configuration next = *config;
-            next.ssid = candidateSsid; next.password = candidatePassword;
-            if (next.save()) { *config = next; setupError = ""; }
-            else setupError = "storage_error";
-            trial = false;
-            candidatePassword = "";
-        }
         if (mdns) MDNS.end();
         mdns = MDNS.begin("fantasy-machine");
         if (mdns) {
@@ -100,7 +88,7 @@ void connectionTick(uint32_t now) {
             MDNS.addServiceTxt("fantasy-machine", "tcp", "path", "/ws");
         }
         Serial.printf("Wi-Fi connected: %s | ws://fantasy-machine.local:81/ws\n", WiFi.localIP().toString().c_str());
-        if (ap && setupError.isEmpty()) closeApAt = now;
+        if (ap && !WifiProvisioning::busy() && !*WifiProvisioning::error()) closeApAt = now;
     }
     if (!connected && connectedBefore) {
         lostAt = now;
@@ -108,19 +96,15 @@ void connectionTick(uint32_t now) {
         if (mdns) { MDNS.end(); mdns = false; }
     }
     connectedBefore = connected;
-    if (trial && !connected && now - attemptAt >= 20000) {
-        trial = false; setupError = "connection_failed"; candidatePassword = "";
-        WiFi.disconnect(false, false);
-        if (!config->ssid.isEmpty()) WiFi.begin(config->ssid.c_str(), config->password.c_str());
-        attemptAt = now;
-    }
-    if (!connected && !trial && !pending) {
+    if (!connected && !WifiProvisioning::busy()) {
         if (now - lostAt >= 60000) startAp();
-        if (!config->ssid.isEmpty() && now - attemptAt >= 15000) {
-            WiFi.reconnect(); attemptAt = now;
+        if (!config->ssid.isEmpty() && now - attemptAt >= 30000) {
+            WiFi.disconnect(false, false);
+            WifiProvisioning::connectSaved();
+            attemptAt = now;
         }
     }
-    if (ap && connected && closeApAt && now - closeApAt >= 15000) {
+    if (ap && connected && !WifiProvisioning::busy() && closeApAt && now - closeApAt >= 60000) {
         WiFi.softAPdisconnect(true); WiFi.mode(WIFI_STA); ap = false; closeApAt = 0;
     }
 }
@@ -135,10 +119,10 @@ void MachineNetwork::begin(Configuration& configuration) {
     WiFi.persistent(false); // Own NVS record; do not write credentials on retries.
     WiFi.mode(WIFI_STA);
     WiFi.setHostname("fantasy-machine");
-    WiFi.setAutoReconnect(true);
+    WifiProvisioning::begin(configuration);
     WiFi.setSleep(false);
     if (config->ssid.isEmpty()) startAp();
-    else WiFi.begin(config->ssid.c_str(), config->password.c_str());
+    else WifiProvisioning::connectSaved();
     lostAt = attemptAt = millis();
     // OS captive-network probes are expected when joining a Wi-Fi without Internet.
     auto setupPage = [] {
@@ -175,16 +159,17 @@ void MachineNetwork::begin(Configuration& configuration) {
         if (!setupRequest()) { http.send(403); return; }
         JsonDocument doc;
         doc["device"] = "MicroFantasy"; doc["schemaVersion"] = 1;
-        doc["connected"] = WiFi.status() == WL_CONNECTED && !pending && !trial && setupError.isEmpty();
-        doc["connecting"] = pending || trial;
-        doc["error"] = setupError;
+        doc["connected"] = WiFi.status() == WL_CONNECTED && !WifiProvisioning::configuring() && !*WifiProvisioning::error();
+        doc["connecting"] = WifiProvisioning::configuring();
+        doc["error"] = WifiProvisioning::error();
         doc["ip"] = WiFi.localIP().toString();
         doc["hostname"] = "fantasy-machine.local";
+        WifiProvisioning::writeStatus(doc);
         reply(200, doc);
     });
     http.on("/api/v1/setup", HTTP_POST, [] {
         if (!setupRequest()) { http.send(403); return; }
-        if (pending || trial) { http.send(409); return; }
+        if (WifiProvisioning::busy()) { http.send(409); return; }
         JsonDocument doc;
         const String body = http.arg("plain");
         if (body.length() > 512 || deserializeJson(doc, body) ||
@@ -194,9 +179,19 @@ void MachineNetwork::begin(Configuration& configuration) {
             doc["ssid"].as<JsonString>().size() != strlen(ssid.c_str()) ||
             doc["password"].as<JsonString>().size() != strlen(password.c_str()) ||
             (password.length() != 0 && (password.length() < 8 || password.length() > 63))) { http.send(400); return; }
-        candidateSsid = ssid; candidatePassword = password; setupError = "";
-        pending = true;
+        WifiProvisioning::request(ssid, password, millis());
+        closeApAt = 0;
         JsonDocument result; result["accepted"] = true; reply(202, result);
+    });
+    http.on("/api/v1/setup/networks", HTTP_POST, [] {
+        if (!setupRequest()) { http.send(403); return; }
+        if (!WifiProvisioning::scan(millis())) { http.send(409); return; }
+        closeApAt = 0;
+        JsonDocument doc; doc["accepted"] = true; reply(202, doc);
+    });
+    http.on("/api/v1/setup/networks", HTTP_GET, [] {
+        if (!setupRequest()) { http.send(403); return; }
+        JsonDocument doc; WifiProvisioning::writeNetworks(doc); reply(200, doc);
     });
     http.onNotFound([] { http.send(404, "text/plain", "Use MicroFantasy > Configurar Wi-Fi de la maquina"); });
     http.begin();

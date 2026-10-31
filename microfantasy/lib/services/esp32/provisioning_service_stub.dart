@@ -14,4 +14,10 @@ class HttpMachineProvisioningService implements MachineProvisioningService {
       throw UnsupportedError(
         'Usa la app Android o iOS para configurar la máquina.',
       );
+  @override
+  Future<void> startScan() async =>
+      throw UnsupportedError('Usa la app Android o iOS.');
+  @override
+  Future<MachineWifiScan> networks() async =>
+      throw UnsupportedError('Usa la app Android o iOS.');
 }

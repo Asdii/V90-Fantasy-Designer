@@ -10,11 +10,18 @@ class HttpMachineProvisioningService implements MachineProvisioningService {
   final Uri endpoint;
   final Duration timeout;
 
-  Future<Map<String, dynamic>> _request(String method, [String? body]) async {
+  Future<Map<String, dynamic>> _request(
+    String method, {
+    String? body,
+    bool scan = false,
+  }) async {
     final client = HttpClient()..connectionTimeout = timeout;
     try {
       return await (() async {
-        final request = await client.openUrl(method, endpoint);
+        final uri = scan
+            ? endpoint.replace(path: '${endpoint.path}/networks')
+            : endpoint;
+        final request = await client.openUrl(method, uri);
         request.followRedirects =
             false; // Never forward home credentials elsewhere.
         if (body != null) {
@@ -33,7 +40,7 @@ class HttpMachineProvisioningService implements MachineProvisioningService {
         final bytes = <int>[];
         await for (final chunk in response) {
           bytes.addAll(chunk);
-          if (bytes.length > 4096) {
+          if (bytes.length > (scan ? 16384 : 4096)) {
             throw const FormatException('Respuesta demasiado grande');
           }
         }
@@ -54,9 +61,21 @@ class HttpMachineProvisioningService implements MachineProvisioningService {
 
   @override
   Future<void> configure(String ssid, String password) async {
-    final data = await _request('POST', setupPayload(ssid, password));
+    final data = await _request('POST', body: setupPayload(ssid, password));
     if (data['accepted'] != true) {
       throw const FormatException('Configuración no aceptada');
     }
   }
+
+  @override
+  Future<void> startScan() async {
+    final data = await _request('POST', body: '{}', scan: true);
+    if (data['accepted'] != true) {
+      throw const FormatException('Búsqueda no aceptada');
+    }
+  }
+
+  @override
+  Future<MachineWifiScan> networks() async =>
+      MachineWifiScan.fromJson(await _request('GET', scan: true));
 }
