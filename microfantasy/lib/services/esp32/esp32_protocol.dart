@@ -2,10 +2,11 @@ import 'dart:convert';
 
 /// Decoding is independent from networking so native and simulated inputs agree.
 class Esp32Telemetry {
-  const Esp32Telemetry({this.xMm, this.status, this.connected});
+  const Esp32Telemetry({this.xMm, this.status, this.connected, this.deviceId});
   final double? xMm;
   final String? status;
   final bool? connected;
+  final String? deviceId;
 
   factory Esp32Telemetry.decode(Object? message, {int maxBytes = 16 * 1024}) {
     final String text;
@@ -33,6 +34,15 @@ class Esp32Telemetry {
     final rawX = value['x_mm'];
     final rawStatus = value['status'];
     final rawConnected = value['connected'];
+    final deviceId = value['device_id'];
+    if (deviceId != null &&
+        (deviceId is! String ||
+            deviceId.isEmpty ||
+            deviceId.length > 80 ||
+            value['service'] != 'microfantasy-machine' ||
+            value['api_version'] != 1)) {
+      throw const FormatException('Invalid machine identity');
+    }
     if (value.containsKey('connected') && rawConnected is! bool) {
       throw const FormatException('connected must be a boolean');
     }
@@ -54,6 +64,7 @@ class Esp32Telemetry {
       xMm: (rawX as num?)?.toDouble(),
       status: rawStatus as String?,
       connected: rawConnected as bool?,
+      deviceId: deviceId as String?,
     );
   }
 }

@@ -26,7 +26,7 @@ class SettingsScreen extends StatelessWidget {
             ListTile(
               contentPadding: EdgeInsets.zero,
               title: const Text('Dirección de la máquina'),
-              subtitle: Text(s.host),
+              subtitle: Text(c.machineAddress),
               trailing: const Icon(Icons.edit_outlined),
               onTap: () async {
                 final v = await askText(
@@ -53,6 +53,7 @@ class SettingsScreen extends StatelessWidget {
                       await c.updateSettings(
                         c.settings.copyWith(
                           host: ip,
+                          clearMachineId: true,
                           port: 81,
                           simulation: false,
                         ),

@@ -15,8 +15,8 @@ Old firmware retains manual SSID entry. Connection progress exposes `phase`,
 and three automatic firmware attempts, surviving temporary AP channel changes.
 Only a confirmed connection without a storage error is shown as saved.
 
-Parent app dependency: `nsd: ^4.1.0` (installed). The implementation uses the
-startDiscovery/stopDiscovery API also in current 5.0.1 pub.dev docs (checked 2026-10-30).
+Parent app dependency: `nsd: ^4.1.0` (installed). Discovery uses its
+startDiscovery/stopDiscovery API with resolved IPv4 addresses.
 
 ```dart
 import 'services/esp32/esp32_service.dart';
@@ -30,20 +30,24 @@ mock.setPosition(12.3); // Bind a manual simulation slider here.
 mock.startSimulation(minMm: 0, maxMm: 20);
 mock.stopSimulation();
 
-final real = WebSocketEsp32Service(); // allowZeroX defaults false.
+final real = WebSocketEsp32Service(
+  resolver: Esp32Discovery(),
+  // deviceId: savedMachineId, // Optional until the first verified connection.
+); // allowZeroX defaults false.
 await real.connect(Uri.parse('ws://fantasy-machine.local:81/ws'));
 // All services: positionStream, statusStream, currentPosition, currentStatus,
 // connect([Uri? endpoint]), disconnect(), zeroX(), dispose().
 
+// Standalone lookup, if needed; the real service owns its resolver above.
 final discovery = Esp32Discovery();
-discovery.devicesStream.listen((devices) { /* devices[i].endpoint */ });
-await discovery.start();
-await discovery.stop();
+final device = await discovery.resolve(Uri.parse('ws://192.168.1.84:81/ws'));
+// device?.endpoint is the verified address, which may now be .82.
+await discovery.dispose();
 ```
 
 `Esp32Position`: `double xMm`, `DateTime receivedAt`.
 `Esp32Status`: `Esp32ConnectionState state`, `String? message`, `Uri? endpoint`,
-`String? deviceStatus`, `int reconnectAttempt`, `bool isConnected`.
+`String? deviceStatus`, `String? deviceId`, `int reconnectAttempt`, `bool isConnected`.
 States: disconnected, connecting, connected, reconnecting, unsupported, error.
 Streams broadcast updates; read current getters for the initial snapshot.
 The connected mock republishes its current X every 100ms, including manual slider
@@ -73,10 +77,42 @@ The sole optional outbound application message is `{ "type": "zero_x" }`;
 construct with `allowZeroX: true` and explicitly call `zeroX()` to send it.
 No movement, homing, cutting, or job commands exist.
 
-Discovery defaults: `_fantasy-machine._tcp`, WebSocket path `/ws`, scan duration 10s.
-Both are configurable because firmware advertisement is not yet specified.
-Only resolved services are offered; discovery never connects automatically.
-Stop discovery on application pause; dispose it with the owning controller.
+### Discovery and recovery
+
+Every connection/reconnection races the last address, `fantasy-machine.local`,
+the setup AP (`192.168.4.1`), fresh DNS-SD `_fantasy-machine._tcp` and a UDP local
+broadcast on port **42190**. A round lasts at most 3 s and finishes as soon as a
+verified candidate responds; individual HTTP probes expire after 700 ms. There
+is no subnet-wide HTTP scan. UDP queries repeat every 500 ms during that round.
+
+UDP request: `{"type":"discover","api_version":1,"nonce":"random-token"}`.
+Only matching replies (`type: discovery`, `service: microfantasy-machine`,
+`api_version: 1`, same nonce) become candidates. The reply's source address is
+used; its advertised `ip` is never trusted as the connection destination.
+
+Each candidate must answer `GET /api/v1/info` with `service`, `api_version`,
+`device_id`, `ws_port` and `ws_path`. HTTP redirects are rejected. The connected
+HTTP peer address selects the socket destination; the WebSocket must then repeat
+the expected identity in its first valid status. This prevents an old address
+reassigned to a different device from providing readings. Identity derives from
+the board MAC; it is not pairing or cryptographic authentication.
+
+Only after WebSocket confirmation does `AppController` persist the address and
+identity. This update does not restart the connection or change the calibration.
+Before an identity is known, old firmware can identify itself through the existing
+`/api/v1/apps` service marker. Once an ID is remembered, unidentified or different
+boards are rejected; explicitly changing the manual hostname or provisioning a
+new machine clears that saved ID.
+
+Retry delays are 1, 2, 4, then at most 5 s, with a fresh lookup each time. The app
+uses a 2 s WebSocket ping interval and the configured connection/telemetry timeout
+(5 s by default). On pause it closes the socket and cancels discovery; on resume
+it resolves the machine again. Work, step and calibration are retained. Lost
+readings remain invalid until fresh telemetry arrives. Reconnection sends no zero.
+All losing HTTP probes, UDP timers/sockets and DNS-SD listeners are cleaned up.
+If Bonjour is unavailable, HTTP/UDP can still succeed; if UDP broadcast is blocked,
+Bonjour or a known address can still succeed. Isolated Wi-Fi clients/VLANs must
+still permit communication; discovery cannot bypass network isolation.
 
 The parent owns platform setup (these files deliberately do not alter it):
 - Android: INTERNET and CHANGE_WIFI_MULTICAST_STATE permissions.
@@ -85,10 +121,14 @@ The parent owns platform setup (these files deliberately do not alter it):
 - Configure transport policy for local unencrypted networking where required.
 - Web uses MockEsp32Service. Native socket/discovery stubs report unsupported.
 
-Sources: https://pub.dev/packages/nsd and
-https://pub.dev/documentation/nsd/latest/nsd/startDiscovery.html
+Sources: [nsd 4.1.0](https://pub.dev/packages/nsd/versions/4.1.0),
+[Android NSD](https://developer.android.com/develop/connectivity/wifi/use-nsd),
+[ESPHome mDNS](https://esphome.io/components/mdns/), and
+[ESPHome reconnect logic](https://github.com/esphome/aioesphomeapi/blob/main/aioesphomeapi/reconnect_logic.py).
 
 Focused verification from the microfantasy directory:
 `flutter test test/services/esp32`
+`flutter test test/app_connection_test.dart` also checks persistence without a
+reconnect loop, background/resume, and preservation of work and calibration.
 Browser conditional imports can be checked with
 `dart compile js test/services/esp32/web_preview_smoke.dart`.

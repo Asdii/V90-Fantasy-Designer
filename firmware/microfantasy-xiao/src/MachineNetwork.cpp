@@ -2,7 +2,9 @@
 #include "Encoder.h"
 #include "PositionMath.h"
 #include "WifiProvisioning.h"
+#include "WifiReconnectPolicy.h"
 #include <WiFi.h>
+#include <WiFiUdp.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
 #include <ESPmDNS.h>
@@ -11,10 +13,57 @@
 namespace {
 WebServer http(80);
 WebSocketsServer ws(81);
+WiFiUDP discovery;
+constexpr uint16_t DISCOVERY_PORT = 42190;
+WifiReconnectPolicy reconnect;
 Configuration* config;
+String deviceId;
+IPAddress announcedIp;
 int64_t zero = 0;
 bool ap = false, connectedBefore = false, mdns = false;
-uint32_t attemptAt = 0, lostAt = 0, closeApAt = 0, lastFrame = 0, lastStatus = 0;
+uint32_t lostAt = 0, closeApAt = 0, lastFrame = 0, lastStatus = 0;
+uint32_t seenDisconnect = 0, lastDiscoveryReply = 0, lastMdnsAttempt = 0;
+
+void identity(JsonDocument& doc) {
+    doc["service"] = "microfantasy-machine";
+    doc["api_version"] = 1;
+    doc["device_id"] = deviceId;
+    doc["hostname"] = "fantasy-machine.local";
+    doc["ip"] = WiFi.localIP().toString();
+    doc["ws_port"] = 81;
+    doc["ws_path"] = "/ws";
+}
+
+void discoveryTick(uint32_t now) {
+    const int length = discovery.parsePacket();
+    if (!length) return;
+    if (length > 256 || now - lastDiscoveryReply < 100) { discovery.flush(); return; }
+    char packet[257];
+    const int read = discovery.read(packet, sizeof(packet) - 1);
+    if (read <= 0) return;
+    JsonDocument request;
+    if (deserializeJson(request, packet, read) ||
+        request["type"].as<String>() != "discover" || request["api_version"].as<int>() != 1 ||
+        !request["nonce"].is<String>()) return;
+    const String nonce = request["nonce"].as<String>();
+    if (nonce.isEmpty() || nonce.length() > 64) return;
+    JsonDocument response;
+    identity(response);
+    response["type"] = "discovery";
+    response["nonce"] = nonce;
+    String body; serializeJson(response, body);
+    discovery.beginPacket(discovery.remoteIP(), discovery.remotePort());
+    discovery.write(reinterpret_cast<const uint8_t*>(body.c_str()), body.length());
+    discovery.endPacket();
+    lastDiscoveryReply = now;
+}
+
+void position(uint8_t client, uint32_t now) {
+    char body[128];
+    snprintf(body, sizeof(body), "{\"type\":\"position\",\"x_mm\":%.6f,\"timestamp\":%lu}",
+             positionMm(Encoder::read().count, zero, config->inverted), (unsigned long)now);
+    if (client == 255) ws.broadcastTXT(body); else ws.sendTXT(client, body);
+}
 
 void reply(int code, const JsonDocument& doc) {
     String body;
@@ -43,6 +92,7 @@ bool setupRequest() {
 
 void status(uint8_t client) {
     JsonDocument doc;
+    identity(doc);
     doc["type"] = "status";
     doc["connected"] = true; // Transport ready, not a claim of magnetic field health.
     doc["status"] = "incremental_ready";
@@ -74,34 +124,56 @@ void command(uint8_t client, uint8_t* payload, size_t length) {
         return;
     }
     status(255);
+    position(255, millis());
 }
 
 void connectionTick(uint32_t now) {
     WifiProvisioning::tick(now);
-    if (WifiProvisioning::busy()) { attemptAt = now; closeApAt = 0; }
-    const bool connected = WiFi.status() == WL_CONNECTED;
-    if (connected && !connectedBefore) {
+    const uint32_t disconnected = WifiProvisioning::disconnectSequence();
+    if (disconnected != seenDisconnect) {
+        seenDisconnect = disconnected;
+        reconnect.disconnected(now);
+    }
+    if (WifiProvisioning::busy()) { reconnect.started(now); closeApAt = 0; }
+    const IPAddress ip = WiFi.localIP();
+    const bool connected = WiFi.status() == WL_CONNECTED && ip != IPAddress(0, 0, 0, 0);
+    if (connected && (!connectedBefore || ip != announcedIp)) {
+        if (connectedBefore) ws.disconnect();
         if (mdns) MDNS.end();
+        mdns = false;
+        announcedIp = ip;
+        discovery.stop(); discovery.begin(DISCOVERY_PORT);
+        reconnect.connected(now);
+        lastMdnsAttempt = now - 5000;
+        Serial.printf("Wi-Fi connected: %s | device: %s | ws://fantasy-machine.local:81/ws\n",
+                      ip.toString().c_str(), deviceId.c_str());
+        if (ap && !WifiProvisioning::busy() && !*WifiProvisioning::error()) closeApAt = now;
+    }
+    if (connected && !mdns && now - lastMdnsAttempt >= 5000) {
+        lastMdnsAttempt = now;
         mdns = MDNS.begin("fantasy-machine");
         if (mdns) {
+            MDNS.setInstanceName(deviceId.c_str());
             MDNS.addService("fantasy-machine", "tcp", 81);
             MDNS.addServiceTxt("fantasy-machine", "tcp", "path", "/ws");
+            MDNS.addServiceTxt("fantasy-machine", "tcp", "id", deviceId);
+            MDNS.addServiceTxt("fantasy-machine", "tcp", "api_version", "1");
         }
-        Serial.printf("Wi-Fi connected: %s | ws://fantasy-machine.local:81/ws\n", WiFi.localIP().toString().c_str());
-        if (ap && !WifiProvisioning::busy() && !*WifiProvisioning::error()) closeApAt = now;
     }
     if (!connected && connectedBefore) {
         lostAt = now;
         closeApAt = 0;
+        reconnect.disconnected(now);
+        ws.disconnect();
         if (mdns) { MDNS.end(); mdns = false; }
+        discovery.stop(); discovery.begin(DISCOVERY_PORT);
     }
     connectedBefore = connected;
     if (!connected && !WifiProvisioning::busy()) {
         if (now - lostAt >= 60000) startAp();
-        if (!config->ssid.isEmpty() && now - attemptAt >= 30000) {
+        if (!config->ssid.isEmpty() && reconnect.retry(now, WifiProvisioning::stationAssociated())) {
             WiFi.disconnect(false, false);
             WifiProvisioning::connectSaved();
-            attemptAt = now;
         }
     }
     if (ap && connected && !WifiProvisioning::busy() && closeApAt && now - closeApAt >= 60000) {
@@ -117,13 +189,16 @@ const char* MachineNetwork::wifiStatus() {
 void MachineNetwork::begin(Configuration& configuration) {
     config = &configuration;
     WiFi.persistent(false); // Own NVS record; do not write credentials on retries.
-    WiFi.mode(WIFI_STA);
     WiFi.setHostname("fantasy-machine");
+    WiFi.mode(WIFI_STA);
+    deviceId = "microfantasy-" + WiFi.macAddress();
+    deviceId.replace(":", ""); deviceId.toLowerCase();
     WifiProvisioning::begin(configuration);
     WiFi.setSleep(false);
     if (config->ssid.isEmpty()) startAp();
     else WifiProvisioning::connectSaved();
-    lostAt = attemptAt = millis();
+    lostAt = millis();
+    reconnect.started(lostAt);
     // OS captive-network probes are expected when joining a Wi-Fi without Internet.
     auto setupPage = [] {
         http.send(200, "text/html; charset=utf-8", "<h2>MicroFantasy</h2><p>Conectado a la maquina. Abre MicroFantasy y elige Configurar Wi-Fi de la maquina. Esta red no tiene Internet.</p>");
@@ -134,6 +209,9 @@ void MachineNetwork::begin(Configuration& configuration) {
     http.on("/hotspot-detect.html", HTTP_GET, setupPage);
     http.on("/connecttest.txt", HTTP_GET, setupPage);
     http.on("/favicon.ico", HTTP_GET, [] { http.send(204); });
+    http.on("/api/v1/info", HTTP_GET, [] {
+        JsonDocument doc; identity(doc); reply(200, doc);
+    });
     // Browser discovery bridge. Only active sensor clients become candidates;
     // V90 verifies each candidate's /api/v1/status before offering it to the user.
     http.on("/api/v1/apps", HTTP_OPTIONS, [] {
@@ -164,6 +242,7 @@ void MachineNetwork::begin(Configuration& configuration) {
         doc["error"] = WifiProvisioning::error();
         doc["ip"] = WiFi.localIP().toString();
         doc["hostname"] = "fantasy-machine.local";
+        doc["device_id"] = deviceId;
         WifiProvisioning::writeStatus(doc);
         reply(200, doc);
     });
@@ -195,14 +274,16 @@ void MachineNetwork::begin(Configuration& configuration) {
     });
     http.onNotFound([] { http.send(404, "text/plain", "Use MicroFantasy > Configurar Wi-Fi de la maquina"); });
     http.begin();
+    discovery.begin(DISCOVERY_PORT);
     ws.begin();
     ws.onEvent([](uint8_t client, WStype_t type, uint8_t* data, size_t length) {
         if (type == WStype_CONNECTED) {
             if (String(reinterpret_cast<char*>(data)) != "/ws") { ws.disconnect(client); return; }
             status(client);
+            position(client, millis());
         } else if (type == WStype_TEXT) command(client, data, length);
     });
-    ws.enableHeartbeat(5000, 3000, 2);
+    ws.enableHeartbeat(3000, 1500, 2);
 }
 
 void MachineNetwork::reopenSetup() {
@@ -214,16 +295,13 @@ void MachineNetwork::reopenSetup() {
 void MachineNetwork::tick() {
     const uint32_t now = millis();
     connectionTick(now);
-    http.handleClient();
     ws.loop();
-    if (now - lastFrame >= 40) { // 25 Hz, including when stationary.
+    if (now - lastFrame >= 34) { // About 29 Hz, including when stationary.
         lastFrame = now;
-        JsonDocument doc;
-        doc["type"] = "position";
-        doc["x_mm"] = positionMm(Encoder::read().count, zero, config->inverted);
-        doc["timestamp"] = now;
-        String body; serializeJson(doc, body); ws.broadcastTXT(body);
+        if (ws.connectedClients()) position(255, now);
     }
+    discoveryTick(now);
+    http.handleClient();
     if (now - lastStatus >= 1000) {
         lastStatus = now;
         const auto sample = Encoder::read();

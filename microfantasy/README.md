@@ -158,9 +158,11 @@ Contrato detallado: [receptor](lib/services/fantasy_designer/README.md).
 Configuración predeterminada: `ws://fantasy-machine.local:81/ws`.
 
 - Activar/desactivar Simulación selecciona el servicio sin cambiar widgets.
-- Búsqueda DNS-SD/mDNS de `_fantasy-machine._tcp`; hostname o IP manual como respaldo.
+- Búsqueda DNS-SD/mDNS de `_fantasy-machine._tcp`, consulta UDP local y verificación HTTP de identidad. Hostname o IP manual como respaldo.
 - Puerto y timeout en Opciones avanzadas.
-- Reconexión con espera creciente, ping y detección de telemetría caducada.
+- La IP guardada es una pista: en cada reconexión se busca de nuevo la misma placa por su identidad, aunque DHCP le haya asignado otra dirección.
+- Reconexión con espera de 1, 2, 4 y hasta 5 s, ping y detección de telemetría caducada. Sólo se muestra conectada después de verificar la respuesta WebSocket.
+- Al regresar del segundo plano se busca de nuevo, sin cambiar el paso ni la calibración. No se envía cero automáticamente.
 - No es necesario cambiar el Wi-Fi del teléfono si ambos equipos están en la misma red.
 
 Mensajes ESP32 → app:
@@ -180,7 +182,7 @@ La marca temporal remota es opcional; la frescura se decide con el tiempo local 
 
 Requiere construir el servicio con `allowZeroX: true` y llamar explícitamente a `zeroX()`. La UI inicial no envía comandos al hardware.
 
-Para conectar hardware: implementa ese WebSocket en el firmware, anuncia el servicio mDNS o introduce IP y puerto, y desactiva Simulación. `MockEsp32Service` y `WebSocketEsp32Service` implementan el mismo contrato.
+Para conectar hardware, carga el [firmware XIAO ESP32-C3](../firmware/microfantasy-xiao/README.md), configura su Wi-Fi y desactiva Simulación. `MockEsp32Service` y `WebSocketEsp32Service` implementan el mismo contrato. Para usar el descubrimiento por identidad y UDP hay que actualizar tanto firmware como app. [Protocolo y recuperación](lib/services/esp32/README.md).
 
 ### Configuración del Wi-Fi de casa
 

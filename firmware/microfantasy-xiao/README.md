@@ -118,7 +118,9 @@ lo que **no puede confirmarse presencia del sensor ni calidad del campo**:
 ## WebSocket
 
 `ws://fantasy-machine.local:81/ws`, o `ws://IP:81/ws`.
-25 frames/s, incluso sin movimiento; diagnóstico Serial una vez por segundo.
+Aproximadamente 29 frames/s (intervalo de 34 ms), incluso sin movimiento;
+diagnóstico Serial una vez por segundo. Al conectar se envían identidad y una
+lectura inmediatamente. `zero_x` también publica la nueva posición de inmediato.
 
 ```json
 {"type":"position","x_mm":-16.103515625,"timestamp":12345}
@@ -129,7 +131,7 @@ su hora de recepción para detectar datos obsoletos. No se suaviza el dato real.
 Al conectar y una vez por segundo:
 
 ```json
-{"type":"status","connected":true,"status":"incremental_ready","sensor":"unverified","wifi":"ok","inverted":false,"counts_per_mm":512}
+{"type":"status","connected":true,"service":"microfantasy-machine","api_version":1,"device_id":"microfantasy-aabbccddeeff","hostname":"fantasy-machine.local","ip":"192.168.1.82","ws_port":81,"ws_path":"/ws","status":"incremental_ready","sensor":"unverified","wifi":"ok","inverted":false,"counts_per_mm":512}
 ```
 
 `connected` confirma disponibilidad del transporte, no la presencia física del
@@ -149,6 +151,34 @@ MicroFantasy ya invierte X en la app mediante su ajuste de dirección. **Mantén
 la dirección del firmware normal si usas ese ajuste**, para no invertir dos veces.
 El servicio Dart permite `zero_x` con `allowZeroX: true`; la UI no lo envía
 automáticamente porque cambiar el cero invalida la referencia de calibración.
+
+## Dirección e identidad de la máquina
+
+La IP puede cambiar por DHCP; `device_id` se deriva de la MAC de la placa y se
+mantiene al reiniciar o cambiar de red. La app recuerda esa identidad y verifica
+la dirección antes de usarla, en lugar de reconectar indefinidamente a una IP vieja.
+
+- `GET /api/v1/info` devuelve los campos de identidad del mensaje anterior,
+  sin credenciales y con `Cache-Control: no-store`, en LAN o en el AP.
+- DNS-SD anuncia `_fantasy-machine._tcp` en el puerto 81, con TXT `id`, `path`
+  y `api_version`. Se renueva el anuncio si cambia la IP.
+- Respaldo UDP local: puerto **42190**. Petición
+  `{"type":"discover","api_version":1,"nonce":"token-de-la-busqueda"}`.
+  Respuesta unicast con `type: "discovery"`, el mismo `nonce` y los campos de
+  identidad. Máximo 256 bytes por petición y diez respuestas por segundo.
+- El móvil usa la dirección del emisor verificada por HTTP, no el campo `ip`:
+  durante la configuración la IP de la interfaz AP puede ser diferente de la LAN.
+- Después del HTTP, el primer status WebSocket confirma la misma identidad.
+  No requiere código de emparejamiento. Es identificación de equipos en una LAN
+  de confianza, no autenticación criptográfica.
+
+Ante una desconexión Wi-Fi confirmada se reintenta tras 1 s, luego 2, 4 y hasta
+8 s entre fallos. Una asociación en curso conserva hasta 15 s; DHCP dispone de
+hasta 25 s desde el intento. Estos tiempos evitan reiniciar continuamente una
+negociación válida. El flujo de configuración inicial conserva sus tres intentos.
+La búsqueda del móvil se repite en cada reconexión y al volver del segundo plano;
+una lectura desconectada se invalida hasta recibir otra nueva. Ni la búsqueda ni
+la reconexión ponen X a cero ni escriben repetidamente credenciales en NVS.
 
 ## API de configuración
 
@@ -187,6 +217,8 @@ c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmwa
 /tmp/position-test
 c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_setup_test.cpp -o /tmp/wifi-setup-test
 /tmp/wifi-setup-test
+c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_reconnect_test.cpp -o /tmp/wifi-reconnect-test
+/tmp/wifi-reconnect-test
 ```
 
 Las pruebas móviles cubren validación de credenciales, HTTP real contra un
@@ -196,12 +228,15 @@ de telemetría y reconexión WebSocket. No sustituyen la prueba eléctrica:
 1. Mueve 2 mm conocidos: debe cambiar 1024 cuentas; vuelve al origen.
 2. Prueba ambos sentidos, cero e inversión.
 3. Comprueba `invalid: 0` con la máxima velocidad manual prevista y Wi-Fi activo.
-4. Déjalo quieto: llegan datos a 25 Hz sin error por inactividad.
+4. Déjalo quieto: llegan datos a aproximadamente 29 Hz sin error por inactividad.
 5. Apaga/enciende: recupera Wi-Fi y dirección; X vuelve a la referencia de arranque.
 6. Prueba contraseña incorrecta, recuperación de red y reconexión de la app.
 7. Con un SSID unificado, selecciona la red desde la lista, espera confirmación,
    reinicia el ESP32 y comprueba la reconexión. Verifica también interrupción
    temporal del AP, reintentos, fallo DHCP y conservación de la red anterior.
+8. Comprueba que la IP mostrada en la app coincide con Serial. Después de un
+   cambio de IP o de red del teléfono, debe recuperar la misma placa sin escribir
+   la nueva dirección. Cierra/abre la app y comprueba que conserva paso y calibración.
 
 La velocidad máxima real y la pérdida de pulsos bajo carga deben medirse con
 hardware. Esta implementación por ISR no promete los 650 mm/s máximos del chip.
@@ -214,6 +249,9 @@ hardware. Esta implementación por ISR no promete los 650 mm/s máximos del chip
 - [Espressif Wi-Fi API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/wifi.html)
 - [WPA3 / SAE en ESP-IDF 4.4.8](https://docs.espressif.com/projects/esp-idf/en/v4.4.8/esp32c3/api-guides/wifi-security.html)
 - [arduinoWebSockets](https://github.com/Links2004/arduinoWebSockets)
+- [ESPHome mDNS](https://esphome.io/components/mdns/)
+- [Reconexión y descubrimiento de ESPHome](https://github.com/esphome/aioesphomeapi/blob/main/aioesphomeapi/reconnect_logic.py)
+- [Android Network Service Discovery](https://developer.android.com/develop/connectivity/wifi/use-nsd)
 
 
 ## Descubrimiento del telefono desde V90

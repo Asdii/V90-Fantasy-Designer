@@ -1,31 +1,26 @@
-import 'dart:async';
 import 'esp32_device.dart';
 
-class Esp32Discovery {
+class Esp32Discovery implements Esp32EndpointResolver {
   Esp32Discovery({
-    this.serviceType = '_fantasy-machine._tcp',
-    this.webSocketPath = '/ws',
+    this.scanDuration = const Duration(seconds: 3),
+    this.probeTimeout = const Duration(milliseconds: 700),
+    this.httpPort = 80,
+    this.discoveryPort = 42190,
+    this.enableMdns = true,
+    this.broadcastHost = '255.255.255.255',
+    this.fallbackHosts = const ['fantasy-machine.local', '192.168.4.1'],
   });
-  final String serviceType;
-  final String webSocketPath;
-  final _errors = StreamController<String>.broadcast();
-  bool _disposed = false;
-  Stream<List<Esp32Device>> get devicesStream => const Stream.empty();
-  Stream<String> get errorStream => _errors.stream;
-  List<Esp32Device> get devices => const [];
-  bool get isDiscovering => false;
-  bool get isSupported => false;
-  Future<void> start({
-    Duration scanDuration = const Duration(seconds: 10),
-  }) async {
-    if (_disposed) throw StateError('Esp32Discovery is disposed');
-    _errors.add('mDNS is unavailable in web preview; use simulation');
-  }
 
-  Future<void> stop() async {}
-  Future<void> dispose() async {
-    if (_disposed) return;
-    _disposed = true;
-    await _errors.close();
-  }
+  final Duration scanDuration, probeTimeout;
+  final int httpPort, discoveryPort;
+  final bool enableMdns;
+  final String broadcastHost;
+  final List<String> fallbackHosts;
+  bool get isSupported => false;
+  @override
+  Future<Esp32Device?> resolve(Uri previous, {String? deviceId}) async => null;
+  @override
+  void cancel() {}
+  @override
+  Future<void> dispose() async {}
 }

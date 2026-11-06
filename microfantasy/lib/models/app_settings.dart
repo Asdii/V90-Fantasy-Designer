@@ -36,6 +36,7 @@ class AppSettings {
   factory AppSettings({
     bool simulation = true,
     String host = 'fantasy-machine.local',
+    String? machineId,
     int port = 81,
     int timeoutSeconds = 5,
     LengthUnit units = LengthUnit.mm,
@@ -49,6 +50,12 @@ class AppSettings {
     AppearanceTheme appearance = AppearanceTheme.light,
   }) {
     nonEmptyString(host, 'host');
+    if (machineId != null) {
+      nonEmptyString(machineId, 'machineId');
+      if (machineId.length > 80) {
+        throw const FormatException('machineId is too long');
+      }
+    }
     final Uri? hostUri = Uri.tryParse('http://$host');
     if (RegExp(r'[\s/?#@]').hasMatch(host) ||
         hostUri == null ||
@@ -70,6 +77,7 @@ class AppSettings {
     return AppSettings._(
       simulation: simulation,
       host: host,
+      machineId: machineId,
       port: port,
       timeoutSeconds: timeoutSeconds,
       units: units,
@@ -87,6 +95,7 @@ class AppSettings {
   const AppSettings._({
     required this.simulation,
     required this.host,
+    required this.machineId,
     required this.port,
     required this.timeoutSeconds,
     required this.units,
@@ -102,6 +111,9 @@ class AppSettings {
 
   factory AppSettings.fromJson(Map<String, Object?> json) {
     return AppSettings(
+      machineId: json['machineId'] == null
+          ? null
+          : nonEmptyString(json['machineId'], 'machineId'),
       simulation: boolean(
         valueOrDefault(json, 'simulation', true),
         'simulation',
@@ -152,6 +164,7 @@ class AppSettings {
 
   final bool simulation;
   final String host;
+  final String? machineId;
   final int port;
   final int timeoutSeconds;
   final LengthUnit units;
@@ -171,6 +184,8 @@ class AppSettings {
   AppSettings copyWith({
     bool? simulation,
     String? host,
+    String? machineId,
+    bool clearMachineId = false,
     int? port,
     int? timeoutSeconds,
     LengthUnit? units,
@@ -187,6 +202,7 @@ class AppSettings {
     return AppSettings(
       simulation: simulation ?? this.simulation,
       host: host ?? this.host,
+      machineId: clearMachineId ? null : machineId ?? this.machineId,
       port: port ?? this.port,
       timeoutSeconds: timeoutSeconds ?? this.timeoutSeconds,
       units: units ?? this.units,
@@ -206,6 +222,7 @@ class AppSettings {
   Map<String, Object?> toJson() => <String, Object?>{
     'simulation': simulation,
     'host': host,
+    'machineId': machineId,
     'port': port,
     'timeoutSeconds': timeoutSeconds,
     'units': units.name,

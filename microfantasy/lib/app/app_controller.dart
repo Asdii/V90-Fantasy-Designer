@@ -21,6 +21,7 @@ class AppController extends ChangeNotifier {
   AppController({
     required this.store,
     required this.designer,
+    this.hardwareFactory,
     FileTransfer? files,
     AppUpdateService updateService = const UnsupportedUpdateService(),
   }) : files = files ?? FileTransfer(),
@@ -30,15 +31,13 @@ class AppController extends ChangeNotifier {
        calibrations = CalibrationRepository(store);
   final KeyValueStore store;
   final FantasyDesignerService designer;
+  final Esp32Service Function(AppSettings settings)? hardwareFactory;
   final FileTransfer files;
   final UpdateController updates;
   final JobRepository jobs;
   final SettingsRepository preferences;
   final CalibrationRepository calibrations;
   final CalibrationService calibration = const CalibrationService();
-  final Esp32Discovery discovery = Esp32Discovery(
-    serviceType: '_fantasy-machine._tcp',
-  );
   Esp32Service? _esp;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
   StreamSubscription<Esp32Position>? _positionSub;
@@ -98,7 +97,13 @@ class AppController extends ChangeNotifier {
       ? 'Simulación'
       : actualX != null
       ? 'Conectado'
+      : _esp?.currentStatus.state == Esp32ConnectionState.reconnecting ||
+            _esp?.currentStatus.state == Esp32ConnectionState.connecting
+      ? 'Buscando máquina…'
       : 'Desconectado · esperando lectura';
+  String get machineAddress => _esp?.currentStatus.isConnected == true
+      ? _esp!.currentStatus.endpoint?.host ?? settings.host
+      : settings.host;
   bool get receiverSupported => designer.supportsNativeReceiver;
   bool get receiving => designer.currentStatus.isRunning;
   String get receiverLabel =>
@@ -172,30 +177,8 @@ class AppController extends ChangeNotifier {
       designer.pendingJobs.listen((j) => unawaited(receiveJob(j))),
     );
     _subscriptions.add(designer.statusStream.listen((_) => _refresh()));
-    _subscriptions.add(discovery.errorStream.listen(message));
-    _subscriptions.add(
-      discovery.devicesStream.listen((devices) {
-        if (devices.isNotEmpty) {
-          final device = devices.first;
-          unawaited(
-            updateSettings(
-              settings.copyWith(
-                host: device.host,
-                port: device.port,
-                simulation: false,
-              ),
-            ),
-          );
-          message('Máquina encontrada: ${device.name}');
-          unawaited(discovery.stop());
-        }
-      }),
-    );
     await ensureReceiver();
     await _run(_connect);
-    if (!settings.simulation && !(_esp?.currentStatus.isConnected ?? false)) {
-      unawaited(discoverMachine());
-    }
     _freshness = Timer.periodic(
       const Duration(milliseconds: 500),
       (_) => _refresh(),
@@ -226,15 +209,20 @@ class AppController extends ChangeNotifier {
     await _positionSub?.cancel();
     await _statusSub?.cancel();
     await _esp?.dispose();
-    if (_disposed) return;
+    _esp = null;
     rawX = null;
     _lastPosition = null;
+    if (_disposed || (!_foreground && !settings.simulation)) return;
     final esp = settings.simulation
         ? MockEsp32Service(initialPositionMm: 1.5)
-        : WebSocketEsp32Service(
-            connectTimeout: settings.timeout,
-            telemetryTimeout: settings.timeout,
-          );
+        : hardwareFactory?.call(settings) ??
+              WebSocketEsp32Service(
+                resolver: Esp32Discovery(),
+                deviceId: settings.machineId,
+                connectTimeout: settings.timeout,
+                telemetryTimeout: settings.timeout,
+                pingInterval: const Duration(seconds: 2),
+              );
     _esp = esp;
     _positionSub = esp.positionStream.listen((p) {
       rawX = p.xMm;
@@ -251,6 +239,23 @@ class AppController extends ChangeNotifier {
     });
     _statusSub = esp.statusStream.listen((s) {
       if (!s.isConnected) _lastPosition = null;
+      final endpoint = s.endpoint;
+      if (!settings.simulation &&
+          s.isConnected &&
+          endpoint != null &&
+          (settings.host != endpoint.host ||
+              settings.port != endpoint.port ||
+              settings.machineId != s.deviceId)) {
+        // Persist only a confirmed peer. Updating its address must not restart
+        // the working connection or reset the encoder/calibration.
+        settings = settings.copyWith(
+          host: endpoint.host,
+          port: endpoint.port,
+          machineId: s.deviceId,
+        );
+        final confirmed = settings;
+        _queue(() => preferences.save(confirmed));
+      }
       _refresh();
     });
     await esp.connect(
@@ -263,6 +268,7 @@ class AppController extends ChangeNotifier {
     final reconnect =
         next.simulation != settings.simulation ||
         next.host != settings.host ||
+        next.machineId != settings.machineId ||
         next.port != settings.port ||
         next.timeout != settings.timeout;
     if (next.invertX != settings.invertX) {
@@ -287,9 +293,6 @@ class AppController extends ChangeNotifier {
     _refresh();
     if (reconnect) {
       await _run(_connect);
-      if (!settings.simulation && !(_esp?.currentStatus.isConnected ?? false)) {
-        unawaited(discoverMachine());
-      }
     }
   }
 
@@ -513,7 +516,10 @@ class AppController extends ChangeNotifier {
     _foreground = value;
     final request = _receiverLifecycle.then((_) async {
       if (_disposed) return;
-      if (!value) await discovery.stop();
+      if (!value && !settings.simulation) await _esp?.disconnect();
+      if (value && _foreground && !settings.simulation && actualX == null) {
+        await _connect();
+      }
       await designer.setForeground(value);
       if (value && !_disposed && _foreground && receiverSupported) {
         await designer.start();
@@ -531,12 +537,12 @@ class AppController extends ChangeNotifier {
       return;
     }
     message('Buscando en la red local…');
-    await discovery.start();
+    await _connect();
   });
   Future<void> testConnection() => _run(() async {
     await _connect();
     message(
-      _esp!.currentStatus.isConnected
+      _esp?.currentStatus.isConnected == true
           ? 'Conexión establecida'
           : 'Esperando conexión con la máquina',
     );
@@ -554,7 +560,8 @@ class AppController extends ChangeNotifier {
     }
   }
 
-  void changeHost(String v) => _edit(() => settings.copyWith(host: v));
+  void changeHost(String v) =>
+      _edit(() => settings.copyWith(host: v, clearMachineId: true));
   void changePort(String v) =>
       _edit(() => settings.copyWith(port: int.parse(v)));
   void changeTimeout(String v) =>
@@ -608,7 +615,6 @@ class AppController extends ChangeNotifier {
       unawaited(s.cancel());
     }
     unawaited(_esp?.dispose());
-    unawaited(discovery.dispose());
     unawaited(designer.dispose());
     updates.dispose();
     super.dispose();

@@ -194,6 +194,7 @@ void main() {
       expect(settings.toJson(), <String, Object?>{
         'simulation': true,
         'host': 'fantasy-machine.local',
+        'machineId': null,
         'port': 81,
         'timeoutSeconds': 5,
         'units': 'mm',

@@ -1,17 +1,21 @@
 import 'dart:async';
 import 'esp32_service.dart';
+import 'esp32_device.dart';
 
 /// Browser builds deliberately use MockEsp32Service for preview.
 class WebSocketEsp32Service implements Esp32Service {
   WebSocketEsp32Service({
     this.allowZeroX = false,
+    this.resolver,
+    String? deviceId,
     this.connectTimeout = const Duration(seconds: 5),
     this.telemetryTimeout = const Duration(seconds: 10),
     this.pingInterval = const Duration(seconds: 5),
     this.reconnectDelay = const Duration(seconds: 1),
-    this.maxReconnectDelay = const Duration(seconds: 30),
+    this.maxReconnectDelay = const Duration(seconds: 5),
   });
   final bool allowZeroX;
+  final Esp32EndpointResolver? resolver;
   final Duration connectTimeout,
       telemetryTimeout,
       pingInterval,
@@ -51,6 +55,7 @@ class WebSocketEsp32Service implements Esp32Service {
   Future<void> dispose() async {
     if (_disposed) return;
     _disposed = true;
+    await resolver?.dispose();
     await _statuses.close();
   }
 }

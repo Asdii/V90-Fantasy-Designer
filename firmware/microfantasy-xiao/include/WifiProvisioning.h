@@ -5,6 +5,8 @@
 namespace WifiProvisioning {
 void begin(Configuration& configuration);
 void connectSaved();
+bool stationAssociated();
+uint32_t disconnectSequence();
 void tick(uint32_t now);
 bool busy();
 bool configuring();

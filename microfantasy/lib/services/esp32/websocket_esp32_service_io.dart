@@ -4,17 +4,20 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'esp32_protocol.dart';
+import 'esp32_device.dart';
 import 'esp32_service.dart';
 
 class WebSocketEsp32Service implements Esp32Service {
   WebSocketEsp32Service({
     this.allowZeroX = false,
+    this.resolver,
+    String? deviceId,
     this.connectTimeout = const Duration(seconds: 5),
     this.telemetryTimeout = const Duration(seconds: 10),
     this.pingInterval = const Duration(seconds: 5),
     this.reconnectDelay = const Duration(seconds: 1),
-    this.maxReconnectDelay = const Duration(seconds: 30),
-  }) {
+    this.maxReconnectDelay = const Duration(seconds: 5),
+  }) : _deviceId = deviceId {
     if ([
       connectTimeout,
       telemetryTimeout,
@@ -27,6 +30,9 @@ class WebSocketEsp32Service implements Esp32Service {
   }
 
   final bool allowZeroX;
+  final Esp32EndpointResolver? resolver;
+  String? _deviceId, _candidateId;
+  bool _identityConfirmed = false;
   final Duration connectTimeout;
   final Duration telemetryTimeout;
   final Duration pingInterval;
@@ -69,6 +75,7 @@ class WebSocketEsp32Service implements Esp32Service {
     _endpoint = target;
     _attempt = 0;
     _position = null;
+    resolver?.cancel();
     _cancelTimers();
     await _closeSocket();
     if (!_active(generation)) return;
@@ -87,17 +94,26 @@ class WebSocketEsp32Service implements Esp32Service {
     );
     // timeout() alone does not cancel the underlying handshake. Close any late
     // result so a timed-out or stopped attempt cannot leak a live connection.
-    var expired = false;
-    final pending = WebSocket.connect(
-      _endpoint.toString(),
-      compression: CompressionOptions.compressionOff,
-    );
-    unawaited(
-      pending.then<void>((socket) {
-        if (expired || !_active(generation)) unawaited(_closeQuietly(socket));
-      }, onError: (Object _, StackTrace _) {}),
-    );
     try {
+      _identityConfirmed = false;
+      _candidateId = _deviceId;
+      if (resolver != null) {
+        final device = await resolver!.resolve(_endpoint!, deviceId: _deviceId);
+        if (!_active(generation)) return;
+        if (device == null) throw const SocketException('Machine not found');
+        _endpoint = device.endpoint;
+        _candidateId = _deviceId ?? device.id;
+      }
+      var expired = false;
+      final pending = WebSocket.connect(
+        _endpoint.toString(),
+        compression: CompressionOptions.compressionOff,
+      );
+      unawaited(
+        pending.then<void>((socket) {
+          if (expired || !_active(generation)) unawaited(_closeQuietly(socket));
+        }, onError: (Object _, StackTrace _) {}),
+      );
       final socket = await pending.timeout(
         connectTimeout,
         onTimeout: () {
@@ -136,6 +152,18 @@ class WebSocketEsp32Service implements Esp32Service {
     if (!_active(generation) || !identical(socket, _socket)) return;
     try {
       final telemetry = Esp32Telemetry.decode(message);
+      if (telemetry.deviceId != null) {
+        if (_candidateId != null && telemetry.deviceId != _candidateId) {
+          _lost(generation, socket, 'La dirección pertenece a otra máquina');
+          return;
+        }
+        _deviceId = telemetry.deviceId;
+        _candidateId = _deviceId;
+        _identityConfirmed = true;
+      }
+      // The new firmware identifies itself before its first position. A stale
+      // DNS/HTTP result must not allow telemetry from a different board.
+      if (_candidateId != null && !_identityConfirmed) return;
       _attempt = 0; // Only valid telemetry resets backoff.
       _armTelemetryTimeout(generation, socket);
       if (telemetry.connected == false) {
@@ -211,6 +239,7 @@ class WebSocketEsp32Service implements Esp32Service {
       message: message,
       deviceStatus: deviceStatus,
       reconnectAttempt: _attempt,
+      deviceId: _deviceId,
     );
     _statuses.add(_status);
   }
@@ -232,6 +261,7 @@ class WebSocketEsp32Service implements Esp32Service {
   Future<void> disconnect() async {
     if (_disposed) return;
     _wanted = false;
+    resolver?.cancel();
     _generation++;
     _cancelTimers();
     _position = null;
@@ -269,6 +299,7 @@ class WebSocketEsp32Service implements Esp32Service {
   Future<void> dispose() async {
     if (_disposed) return;
     await disconnect();
+    await resolver?.dispose();
     _disposed = true;
     await Future.wait([_positions.close(), _statuses.close()]);
   }

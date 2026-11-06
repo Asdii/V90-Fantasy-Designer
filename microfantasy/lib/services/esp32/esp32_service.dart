@@ -37,11 +37,13 @@ class Esp32Status {
     this.endpoint,
     this.deviceStatus,
     this.reconnectAttempt = 0,
+    this.deviceId,
   });
   final Esp32ConnectionState state;
   final String? message;
   final Uri? endpoint;
   final String? deviceStatus;
   final int reconnectAttempt;
+  final String? deviceId;
   bool get isConnected => state == Esp32ConnectionState.connected;
 }

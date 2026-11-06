@@ -25,6 +25,7 @@ const char* scanError = "";
 portMUX_TYPE eventMux = portMUX_INITIALIZER_UNLOCKED;
 bool associated = false;
 uint16_t lastReason = 0, loggedReason = 0;
+uint32_t disconnects = 0;
 
 bool compatible(wifi_auth_mode_t auth) {
     return auth == WIFI_AUTH_OPEN || auth == WIFI_AUTH_WPA2_PSK ||
@@ -138,8 +139,10 @@ void WifiProvisioning::begin(Configuration& configuration) {
         if (event == ARDUINO_EVENT_WIFI_STA_DISCONNECTED) {
             associated = false;
             // ASSOC_LEAVE is produced by our deliberate disconnects.
-            if (info.wifi_sta_disconnected.reason != WIFI_REASON_ASSOC_LEAVE)
+            if (info.wifi_sta_disconnected.reason != WIFI_REASON_ASSOC_LEAVE) {
+                ++disconnects;
                 lastReason = info.wifi_sta_disconnected.reason;
+            }
         }
         portEXIT_CRITICAL(&eventMux);
     });
@@ -151,6 +154,20 @@ const char* WifiProvisioning::error() { return policy.error; }
 
 void WifiProvisioning::connectSaved() {
     if (!config->ssid.isEmpty()) connectStation(config->ssid, config->password);
+}
+
+bool WifiProvisioning::stationAssociated() {
+    portENTER_CRITICAL(&eventMux);
+    const bool result = associated;
+    portEXIT_CRITICAL(&eventMux);
+    return result;
+}
+
+uint32_t WifiProvisioning::disconnectSequence() {
+    portENTER_CRITICAL(&eventMux);
+    const uint32_t result = disconnects;
+    portEXIT_CRITICAL(&eventMux);
+    return result;
 }
 
 bool WifiProvisioning::request(const String& ssid, const String& password, uint32_t now) {

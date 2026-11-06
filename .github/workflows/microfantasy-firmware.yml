@@ -31,5 +31,9 @@ jobs:
         run: |
           g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_setup_test.cpp -o /tmp/wifi-setup-test
           /tmp/wifi-setup-test
+      - name: Test Wi-Fi reconnect timing
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_reconnect_test.cpp -o /tmp/wifi-reconnect-test
+          /tmp/wifi-reconnect-test
       - name: Build XIAO ESP32-C3 firmware
         run: pio run -d firmware/microfantasy-xiao -e xiao_esp32c3
