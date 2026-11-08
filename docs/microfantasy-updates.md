@@ -112,6 +112,27 @@ haber calculado el hash del APK descargado por otra aplicación.
 Sin los secretos y la huella, el workflow falla explícitamente antes de compilar;
 nunca publica un APK firmado con una nueva clave aleatoria del runner.
 
+## Descarga de Gradle en Actions
+
+La compilación mantiene Gradle **9.3.1** y utiliza su distribución `bin`, que no
+incluye fuentes ni documentación. El wrapper está generado con esa misma versión,
+verifica el SHA-256 oficial del ZIP y permite 60 segundos por espera de red.
+`actions/setup-java` conserva la distribución y las dependencias Gradle en caché.
+
+El paso **Prepare Gradle distribution** ejecuta únicamente `gradlew --version`:
+si la descarga falla (por ejemplo, HTTP 504), realiza hasta cuatro intentos con
+esperas de 10, 20 y 30 segundos. La compilación, firma y publicación no se repiten
+dentro de ese bucle. El paso tiene un límite de diez minutos.
+
+Si el proveedor de descarga sigue sin responder, Actions falla sin publicar un APK
+incompleto. Se puede usar **Re-run failed jobs** cuando el servicio se recupere.
+Para aplicar cambios al workflow, primero hay que hacer commit y push; reejecutar
+un job antiguo conserva la configuración de aquel commit.
+
+Referencias: [Gradle Wrapper](https://docs.gradle.org/current/userguide/gradle_wrapper.html),
+[checksums oficiales](https://gradle.org/release-checksums/),
+[caché de setup-java](https://github.com/actions/setup-java#caching-packages-dependencies).
+
 ## Pruebas locales
 
 ```powershell

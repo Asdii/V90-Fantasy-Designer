@@ -42,6 +42,31 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+          cache: gradle
+          cache-dependency-path: |
+            microfantasy/android/**/*.gradle*
+            microfantasy/android/gradle.properties
+            microfantasy/android/gradle/wrapper/gradle-wrapper.properties
+            microfantasy/pubspec.lock
+
+      # Download Gradle before building so transient HTTP failures can be retried
+      # without repeating compilation, signing, or release publication.
+      - name: Prepare Gradle distribution
+        timeout-minutes: 10
+        run: |
+          chmod +x android/gradlew
+          for attempt in 1 2 3 4; do
+            echo "Preparing Gradle (attempt $attempt/4)"
+            if ./android/gradlew --version --no-daemon; then
+              exit 0
+            fi
+            if (( attempt < 4 )); then
+              echo "::warning::Gradle bootstrap failed; retrying in $((attempt * 10)) seconds."
+              sleep "$((attempt * 10))"
+            fi
+          done
+          echo "::error::Could not prepare Gradle after 4 attempts. Check the download errors above and rerun the failed job."
+          exit 1
 
       - uses: subosito/flutter-action@v2
         with:
@@ -79,7 +104,6 @@ jobs:
           VERSION_NAME: ${{ steps.version.outputs.name }}
           VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
-          chmod +x android/gradlew
           flutter build apk --release --no-pub --build-name="$VERSION_NAME" --build-number="$VERSION_CODE"
 
       - name: Verify APK and generate update manifest
