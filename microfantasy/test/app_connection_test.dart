@@ -77,6 +77,13 @@ void main() {
       expect(controller.actualX, 12);
       expect(controller.machineAddress, '192.168.1.82');
       expect(configurations, hasLength(1));
+      await Future.wait([
+        controller.reconnectMachine(),
+        controller.reconnectMachine(),
+      ]);
+      await Future<void>.delayed(Duration.zero);
+      expect(configurations, hasLength(2)); // Double tap produces one lookup.
+      expect(controller.actualX, 12); // Reconnection never zeroes the machine.
       final saved = await SettingsRepository(store).load();
       expect(saved.host, '192.168.1.82');
       expect(saved.machineId, 'board-a');
@@ -84,7 +91,7 @@ void main() {
       expect(controller.actualX, isNull);
       await controller.foreground(true);
       await Future<void>.delayed(Duration.zero);
-      expect(configurations, hasLength(2));
+      expect(configurations, hasLength(3));
       expect(configurations.last.machineId, 'board-a');
       expect(controller.actualX, 12);
       expect(controller.stepIndex, 1);

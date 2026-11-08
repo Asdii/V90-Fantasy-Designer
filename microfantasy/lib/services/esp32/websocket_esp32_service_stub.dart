@@ -3,7 +3,7 @@ import 'esp32_service.dart';
 import 'esp32_device.dart';
 
 /// Browser builds deliberately use MockEsp32Service for preview.
-class WebSocketEsp32Service implements Esp32Service {
+class WebSocketEsp32Service implements Esp32Service, XReferenceEsp32Service {
   WebSocketEsp32Service({
     this.allowZeroX = false,
     this.resolver,
@@ -51,6 +51,13 @@ class WebSocketEsp32Service implements Esp32Service {
   @override
   Future<void> zeroX() async =>
       throw UnsupportedError('Native WebSocket unavailable');
+  @override
+  Future<XReferenceAck> setXReference({
+    required String bootId,
+    required String referenceId,
+    required double xMm,
+  }) async =>
+      throw UnsupportedError('Native WebSocket unavailable; use simulation');
   @override
   Future<void> dispose() async {
     if (_disposed) return;

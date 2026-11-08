@@ -2,7 +2,7 @@
 
 Guía móvil de corte manual para lapidarios. El usuario gira R, mueve X hasta la zona de tolerancia y realiza el corte manualmente. La app **no controla motores**. Sólo X se mide y compensa; la pantalla de corte muestra R como orientación manual. La profundidad se conserva en el trabajo recibido, pero no se muestra como indicador.
 
-Aplicación Flutter independiente de V90, con proyectos Android, iOS y una vista web de simulación. Tres secciones: **Corte · Calibración · Configuración**. Interfaz clara en español.
+Aplicación Flutter independiente de V90, con proyectos Android, iOS y una vista web de simulación. Cuatro secciones: **Corte · Calibración R · Calibración X · Configuración**. Interfaz clara en español.
 
 ## Ejecutar
 
@@ -56,7 +56,7 @@ El primer inicio abre **Hexágono de práctica**, con Modo simulación activado.
 1. Recorre el diseño con Anterior/Siguiente.
 2. En Configuración → Opciones avanzadas, mueve X simulado o toca **Ir al objetivo**.
 3. **Animar lectura** vuelve a generar posiciones ficticias.
-4. En Calibración, centra una posición y toca **Establecer referencia**.
+4. En Calibración R, centra una posición y toca **Establecer referencia**.
 5. Repite para otros ángulos; cada punto queda guardado inmediatamente.
 6. Regresa a Corte: con dos o más puntos se activa la compensación.
 7. Cierra y vuelve a abrir: se recuperan trabajo, paso, preferencias, calibración y último trabajo pendiente.
@@ -71,7 +71,41 @@ La regla muestra posiciones X absolutas: la etiqueta central es siempre el **obj
 
 Configuración se organiza como Máquina, V90 Fantasy Designer, Preferencias, Temas, Datos y Opciones avanzadas. Los temas aparecen en este orden: **Claro, Oscuro, Midnight, Solarized Light, Nord, Catppuccin Latte, Dracula, Gruvbox Light y Nord Light**. Claro es el predeterminado en instalaciones nuevas. Oscuro combina fondo negro puro con texto y controles blancos. Las preferencias existentes se conservan. [Fuentes de las paletas y compatibilidad](docs/theme-palettes.md). El verde continúa reservado para confirmar la posición.
 
-## Calibración y coordenadas
+## Centro físico y recorrido X
+
+**Calibración X** guarda una referencia física de la mesa, por separado de la
+compensación de excentricidad de **Calibración R**.
+
+1. En el primer montaje, encuentra el centro con tu herramienta física y toca
+   **Guardar centro (0)**. El ESP32 confirma esa posición como 0.000 mm.
+2. Mueve manualmente la mesa al tope negativo y pulsa **Guardar tope −**.
+3. Mueve la mesa al tope positivo y pulsa **Guardar tope +**. No es necesario que ambos lados
+   midan lo mismo. El visor representa sus distancias reales y la posición actual.
+4. Después de apagar/reiniciar el ESP32, lleva la mesa a cualquiera de los topes
+   guardados y confirma **Estoy en el tope −** o **Estoy en el tope +**. El ESP32 asigna esa coordenada
+   a su contador actual; vuelve manualmente a 0.000 mm para recuperar el centro.
+
+La calibración se guarda en el teléfono por identidad de máquina. La simulación
+usa una identidad separada. No se escriben posiciones continuamente en la flash
+del ESP32. Un corte de Wi-Fi conserva el contador y la referencia mientras la
+placa siga alimentada. Tras un reinicio se exige confirmar un tope; no se reutiliza
+la última lectura del teléfono como si fuera una posición física conocida.
+
+El botón de conexión de la esquina superior derecha pulsa suavemente cuando
+falta la máquina. Tocarlo cancela la espera de reconexión e inicia una nueva
+búsqueda verificada por identidad (mDNS, UDP y direcciones conocidas). No modifica
+el cero. En simulación ofrece cambiar explícitamente a la máquina real.
+
+Se necesita actualizar **la app y el firmware** para registrar el centro/topes.
+Firmware anterior sigue proporcionando lecturas, pero no admite esta función.
+Con el nuevo firmware, la primera conexión real pide definir el centro antes de
+usar la guía de corte. Borrar la calibración no convierte el cero de arranque en
+un centro válido. La simulación inicial conserva su funcionamiento de demostración.
+El cero físico requiere un tope repetible y conteo correcto del sensor; la app
+no detecta por sí sola el contacto con el tope ni mueve la mesa. Si cambia el
+montaje o el recorrido, vuelve a registrar centro y extremos.
+
+## Calibración R y coordenadas
 
 Todos los datos se almacenan en **mm**. La opción cm sólo modifica las etiquetas.
 
@@ -222,7 +256,7 @@ mensajes de error ni se envían a una dirección de redirección.
 - `lib/services/fantasy_designer/`: interfaz, receptor HTTP nativo y variante web.
 - `lib/services/calibration/`: interpolación y compensación.
 - `lib/repositories/`: trabajos, preferencias, calibraciones y almacenamiento desacoplado.
-- `lib/screens/`: Corte, Calibración, Configuración.
+- `lib/screens/`: Corte, Calibración R, Calibración X, Configuración.
 - `lib/widgets/`: barra X, plano 2D, Cut Helper de V90 y mapa circular.
 
 `SharedPreferencesAsync` guarda JSON versionado; repositorios serializan operaciones para evitar perder cambios concurrentes. `MemoryStore` permite pruebas sin plugins. El progreso incluye una copia independiente del trabajo abierto, por lo que recibir otro con el mismo ID no modifica el trabajo en curso antes de aceptarlo.

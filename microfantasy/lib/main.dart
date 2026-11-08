@@ -7,10 +7,12 @@ import 'widgets/microfantasy_mark.dart';
 import 'repositories/shared_preferences_store.dart';
 import 'screens/cut/cut_screen.dart';
 import 'screens/calibration/calibration_screen.dart';
+import 'screens/x_calibration/x_calibration_screen.dart';
 import 'screens/settings/settings_screen.dart';
 import 'services/fantasy_designer/local_receiver_service.dart';
 import 'services/updates/github_update_service.dart';
 import 'widgets/app_updates.dart';
+import 'widgets/machine_connection_button.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -54,6 +56,8 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
     if (c.noticeId != _lastNotice && c.notice != null) {
       _lastNotice = c.noticeId;
       final text = c.notice!;
+      // X capture feedback belongs next to its controls, never over the ruler.
+      if (_tab == 2) return;
       // The incoming-job card already announces the design and offers actions.
       // Do not also cover the cutting controls with a duplicate toast.
       if (c.pendingJob != null && text.startsWith('Nuevo patrón recibido')) {
@@ -67,6 +71,11 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
         );
       });
     }
+  }
+
+  void _selectTab(int tab) {
+    if (tab == 2) _messenger.currentState?.hideCurrentSnackBar();
+    setState(() => _tab = tab);
   }
 
   @override
@@ -100,6 +109,23 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
         final c = widget.controller;
         final compact = MediaQuery.sizeOf(context).height < 740;
         final landscape = MediaQuery.sizeOf(context).aspectRatio > 1.4;
+        final tabs = _AppTabs(selected: _tab, onSelected: _selectTab);
+        final connection = c.ready
+            ? ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 150),
+                child: MachineConnectionButton(
+                  connected: c.machineConnected,
+                  connecting: c.machineConnecting,
+                  enabled: !c.xCalibrationBusy,
+                  simulation: c.settings.simulation,
+                  connectionLabel: c.connectionLabel,
+                  machineAddress: c.machineAddress,
+                  onReconnect: c.reconnectMachine,
+                  onUseRealMachine: () =>
+                      c.updateSettings(c.settings.copyWith(simulation: false)),
+                ),
+              )
+            : const SizedBox(width: 48, height: 48);
         return Scaffold(
           body: SafeArea(
             child: Center(
@@ -107,18 +133,29 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                 constraints: const BoxConstraints(maxWidth: 720),
                 child: Column(
                   children: [
-                    if (!landscape)
+                    if (landscape)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(6, 2, 6, 2),
+                        child: Row(
+                          children: [
+                            Expanded(child: tabs),
+                            const SizedBox(width: 8),
+                            connection,
+                          ],
+                        ),
+                      )
+                    else ...[
                       Padding(
                         padding: EdgeInsets.fromLTRB(
-                          18,
+                          14,
                           compact ? 4 : 10,
-                          18,
+                          14,
                           compact ? 4 : 8,
                         ),
                         child: Row(
                           children: [
-                            MicroFantasyMark(size: compact ? 32 : 40),
-                            const SizedBox(width: 12),
+                            MicroFantasyMark(size: compact ? 28 : 40),
+                            const SizedBox(width: 8),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -145,86 +182,16 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                                 ],
                               ),
                             ),
-                            if (c.ready)
-                              Tooltip(
-                                message: c.connectionLabel,
-                                child: Icon(
-                                  c.settings.simulation
-                                      ? Icons.science_outlined
-                                      : c.actualX != null
-                                      ? Icons.wifi
-                                      : Icons.wifi_off,
-                                  size: 21,
-                                  color: Theme.of(context).colorScheme.primary,
-                                ),
-                              ),
+                            const SizedBox(width: 8),
+                            connection,
                           ],
                         ),
                       ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14),
-                      child: Container(
-                        padding: const EdgeInsets.all(4),
-                        decoration: BoxDecoration(
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.surfaceContainerHigh,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: [
-                            for (final entry in [
-                              'Corte',
-                              'Calibración',
-                              'Configuración',
-                            ].asMap().entries)
-                              Expanded(
-                                child: Semantics(
-                                  selected: _tab == entry.key,
-                                  button: true,
-                                  child: Material(
-                                    color: _tab == entry.key
-                                        ? Theme.of(context).colorScheme.surface
-                                        : Colors.transparent,
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: InkWell(
-                                      borderRadius: BorderRadius.circular(8),
-                                      onTap: () =>
-                                          setState(() => _tab = entry.key),
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          vertical: 12,
-                                          horizontal: 2,
-                                        ),
-                                        child: FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Text(
-                                            entry.value,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            textAlign: TextAlign.center,
-                                            style: TextStyle(
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w600,
-                                              color: _tab == entry.key
-                                                  ? Theme.of(
-                                                      context,
-                                                    ).colorScheme.primary
-                                                  : Theme.of(context)
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                          ],
-                        ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 6),
+                        child: tabs,
                       ),
-                    ),
+                    ],
                     if (c.ready) AppUpdateBanner(controller: c.updates),
                     if (c.ready && c.pendingJob != null)
                       Container(
@@ -276,6 +243,7 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                           : switch (_tab) {
                               0 => CutScreen(controller: c),
                               1 => CalibrationScreen(controller: c),
+                              2 => XCalibrationScreen(controller: c),
                               _ => SettingsScreen(controller: c),
                             },
                     ),
@@ -288,4 +256,116 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
       },
     ),
   );
+}
+
+class _AppTabs extends StatelessWidget {
+  const _AppTabs({required this.selected, required this.onSelected});
+
+  final int selected;
+  final ValueChanged<int> onSelected;
+
+  static const _labels = [
+    'Corte',
+    'Calibración R',
+    'Calibración X',
+    'Configuración',
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    const style = TextStyle(
+      fontSize: 13,
+      height: 1.15,
+      fontWeight: FontWeight.w600,
+    );
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: colors.surfaceContainerHigh,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(3),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            final available = constraints.maxWidth / 4 - 4;
+            bool fits(String label) {
+              final painter = TextPainter(
+                text: TextSpan(
+                  text: label,
+                  style: DefaultTextStyle.of(context).style.merge(style),
+                ),
+                textDirection: Directionality.of(context),
+                textScaler: MediaQuery.textScalerOf(context),
+              )..layout();
+              final fits = painter.width <= available;
+              painter.dispose();
+              return fits;
+            }
+
+            String label(int index) {
+              if (fits(_labels[index])) return _labels[index];
+              if (index == 3) return 'Configu-\nración';
+              if (index == 1 || index == 2) {
+                final axis = index == 1 ? 'R' : 'X';
+                return fits('Calibración')
+                    ? 'Calibración\n$axis'
+                    : 'Calibra-\nción $axis';
+              }
+              return _labels[index];
+            }
+
+            return IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  for (var i = 0; i < _labels.length; i++)
+                    Expanded(
+                      child: Semantics(
+                        button: true,
+                        selected: selected == i,
+                        label: _labels[i],
+                        excludeSemantics: true,
+                        onTap: () => onSelected(i),
+                        child: Material(
+                          color: selected == i
+                              ? colors.surface
+                              : Colors.transparent,
+                          borderRadius: BorderRadius.circular(8),
+                          child: InkWell(
+                            key: ValueKey('app-tab-$i'),
+                            borderRadius: BorderRadius.circular(8),
+                            onTap: () => onSelected(i),
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(minHeight: 48),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 2,
+                                  vertical: 6,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    label(i),
+                                    textAlign: TextAlign.center,
+                                    style: style.copyWith(
+                                      color: selected == i
+                                          ? colors.primary
+                                          : colors.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
 }

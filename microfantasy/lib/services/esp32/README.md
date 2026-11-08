@@ -73,9 +73,50 @@ invalidate their cached readings on a non-connected status and require a fresh
 position before displaying a centered indication.
 Native sockets reconnect with capped backoff, connection timeout, ping/pong, and a
 valid-telemetry timeout. Stale connection attempts cannot revive a stopped service.
-The sole optional outbound application message is `{ "type": "zero_x" }`;
-construct with `allowZeroX: true` and explicitly call `zeroX()` to send it.
-No movement, homing, cutting, or job commands exist.
+Legacy `{ "type": "zero_x" }` requires `allowZeroX: true` and an explicit
+`zeroX()` call. Physical table referencing uses the acknowledged command below.
+Neither command moves the axis. No movement, cutting, or job execution API exists.
+
+### Physical X reference (capability `set_x_reference`)
+
+The optional `XReferenceEsp32Service` interface is implemented by the native
+WebSocket service and mock. Old firmware remains readable without this capability.
+Status advertises `capabilities: ["set_x_reference"]`. Status and **every position**
+include `boot_id` (new on power-on), nullable `reference_id`, and integer
+`reference_revision` (zero until the first coordinate change).
+
+Only an explicit center/stop confirmation sends:
+
+```json
+{"type":"set_x_reference","request_id":"unique-request","boot_id":"current-boot","reference_id":"saved-physical-frame","x_mm":-32.125}
+```
+
+The board sets its RAM offset at the current encoder count and answers:
+
+```json
+{"type":"reference_ack","request_id":"unique-request","accepted":true,"boot_id":"current-boot","reference_id":"saved-physical-frame","reference_revision":1,"x_mm":-32.125}
+```
+
+Failure returns `accepted: false` and an `error` without changing coordinates.
+The app validates ID, boot, frame, finite coordinate and revision, waits up to
+5 s for confirmation, and does **not** retry coordinate commands automatically.
+Duplicate in-flight commands are blocked. Disconnect/reboot cancels a pending
+confirmation. Old-revision samples cannot restore the previous coordinate frame.
+Firmware caches recent successful requests idempotently, so retransmission of
+the same command cannot re-anchor at a different physical count.
+
+`XAxisRepository` stores signed stop distances and the physical frame ID, per
+device, only on user actions. The app persists a new center's intended ID before
+sending it. If acknowledgement is lost, matching live telemetry can confirm the
+intended frame; otherwise it remains unreferenced. A stored number alone never
+enables position confirmation. `sensorX` may display fresh unreferenced readings
+in calibration; `actualX` gates cutting until the stored frame matches the live
+boot, reference ID and revision. Ordinary network reconnection sends no reference
+command. A fresh boot has no reference: the user must physically confirm a stop.
+
+The mock supports `simulateRestart()` for testing power loss, whereas
+`disconnect()`/`connect()` preserve the same boot/frame. `setPosition()` supplies
+manual simulated motion; `setXReference()` assigns the confirmed coordinate.
 
 ### Discovery and recovery
 

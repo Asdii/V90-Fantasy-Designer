@@ -3,12 +3,14 @@
 #include "PositionMath.h"
 #include "WifiProvisioning.h"
 #include "WifiReconnectPolicy.h"
+#include "XReferenceProtocol.h"
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <WebServer.h>
 #include <WebSocketsServer.h>
 #include <ESPmDNS.h>
 #include <ArduinoJson.h>
+#include <esp_random.h>
 
 namespace {
 WebServer http(80);
@@ -19,12 +21,24 @@ WifiReconnectPolicy reconnect;
 Configuration* config;
 String deviceId;
 IPAddress announcedIp;
-int64_t zero = 0;
+XReference::State xReference;
 bool ap = false, connectedBefore = false, mdns = false;
 uint32_t lostAt = 0, closeApAt = 0, lastFrame = 0, lastStatus = 0;
 uint32_t seenDisconnect = 0, lastDiscoveryReply = 0, lastMdnsAttempt = 0;
 
-void identity(JsonDocument& doc) {
+struct Frame {
+    XReference::Snapshot x;
+    uint32_t invalidTransitions;
+    uint32_t timestamp;
+};
+
+Frame capture(const EncoderSample& sample) {
+    return {xReference.snapshot(sample.count), sample.invalidTransitions, millis()};
+}
+
+Frame capture() { return capture(Encoder::read()); }
+
+void identity(JsonDocument& doc, const Frame& frame) {
     doc["service"] = "microfantasy-machine";
     doc["api_version"] = 1;
     doc["device_id"] = deviceId;
@@ -32,6 +46,8 @@ void identity(JsonDocument& doc) {
     doc["ip"] = WiFi.localIP().toString();
     doc["ws_port"] = 81;
     doc["ws_path"] = "/ws";
+    XReferenceProtocol::writeState(doc, frame.x);
+    XReferenceProtocol::writeCapabilities(doc);
 }
 
 void discoveryTick(uint32_t now) {
@@ -48,7 +64,7 @@ void discoveryTick(uint32_t now) {
     const String nonce = request["nonce"].as<String>();
     if (nonce.isEmpty() || nonce.length() > 64) return;
     JsonDocument response;
-    identity(response);
+    identity(response, capture());
     response["type"] = "discovery";
     response["nonce"] = nonce;
     String body; serializeJson(response, body);
@@ -58,10 +74,10 @@ void discoveryTick(uint32_t now) {
     lastDiscoveryReply = now;
 }
 
-void position(uint8_t client, uint32_t now) {
-    char body[128];
-    snprintf(body, sizeof(body), "{\"type\":\"position\",\"x_mm\":%.6f,\"timestamp\":%lu}",
-             positionMm(Encoder::read().count, zero, config->inverted), (unsigned long)now);
+void position(uint8_t client, const Frame& frame) {
+    JsonDocument doc;
+    XReferenceProtocol::writePosition(doc, frame.x, frame.timestamp);
+    String body; serializeJson(doc, body);
     if (client == 255) ws.broadcastTXT(body); else ws.sendTXT(client, body);
 }
 
@@ -90,41 +106,65 @@ bool setupRequest() {
     return ap && http.client().localIP() == WiFi.softAPIP();
 }
 
-void status(uint8_t client) {
+void status(uint8_t client, const Frame& frame, const char* message = "incremental_ready") {
     JsonDocument doc;
-    identity(doc);
+    identity(doc, frame);
     doc["type"] = "status";
     doc["connected"] = true; // Transport ready, not a claim of magnetic field health.
-    doc["status"] = "incremental_ready";
-    doc["sensor"] = Encoder::read().invalidTransitions ? "transition_warning" : "unverified";
+    doc["status"] = message;
+    doc["sensor"] = frame.invalidTransitions ? "transition_warning" : "unverified";
     doc["wifi"] = MachineNetwork::wifiStatus();
-    doc["inverted"] = config->inverted;
+    doc["inverted"] = frame.x.inverted;
     doc["counts_per_mm"] = COUNTS_PER_MM;
     String body; serializeJson(doc, body);
     if (client == 255) ws.broadcastTXT(body); else ws.sendTXT(client, body);
 }
 
+void publish(uint8_t client, const Frame& frame) {
+    // Both messages describe the SAME raw-count/reference snapshot, even if an
+    // encoder interrupt arrives while serializing or transmitting the status.
+    status(client, frame);
+    position(client, frame);
+}
+
+void referenceReply(uint8_t client, const XReference::Ack& ack, const Frame& frame) {
+    JsonDocument doc;
+    XReferenceProtocol::writeAck(doc, ack);
+    String body; serializeJson(doc, body);
+    ws.sendTXT(client, body); // Receipt is private to the initiating socket.
+    publish(255, frame); // Current state, which can be newer than a cached receipt.
+}
+
 void command(uint8_t client, uint8_t* payload, size_t length) {
     JsonDocument doc;
-    if (length > 256 || deserializeJson(doc, payload, length) || !doc.is<JsonObject>()) return;
-    const String type = doc["type"] | "";
-    if (type == "zero_x") zero = Encoder::read().count;
-    else if (type == "set_direction" && doc["inverted"].is<bool>()) {
+    const char* error = XReferenceProtocol::parse(doc, reinterpret_cast<const char*>(payload), length);
+    if (error) {
+        const auto sample = Encoder::read();
+        referenceReply(client, xReference.reject("", error, sample.count), capture(sample));
+        return;
+    }
+    const JsonVariantConst type = doc["type"];
+    if (type == "set_x_reference") {
+        const auto sample = Encoder::read();
+        const auto ack = XReferenceProtocol::anchor(xReference, doc.as<JsonVariantConst>(), sample.count);
+        referenceReply(client, ack, capture(sample));
+        return;
+    }
+    if (type == "zero_x" && doc.size() == 1) xReference.zero(Encoder::read().count);
+    else if (type == "set_direction" && doc.size() == 2 && doc["inverted"].is<bool>()) {
         const bool old = config->inverted;
         config->inverted = doc["inverted"].as<bool>();
         if (old != config->inverted && !config->save()) {
             config->inverted = old;
-            String failure = "{\"type\":\"status\",\"status\":\"storage_error\"}";
-            ws.sendTXT(client, failure);
+            status(client, capture(), "storage_error");
             return;
         }
+        xReference.setDirection(config->inverted);
     } else {
-        String failure = "{\"type\":\"status\",\"status\":\"invalid_command\"}";
-        ws.sendTXT(client, failure);
+        status(client, capture(), "invalid_command");
         return;
     }
-    status(255);
-    position(255, millis());
+    publish(255, capture());
 }
 
 void connectionTick(uint32_t now) {
@@ -191,6 +231,18 @@ void MachineNetwork::begin(Configuration& configuration) {
     WiFi.persistent(false); // Own NVS record; do not write credentials on retries.
     WiFi.setHostname("fantasy-machine");
     WiFi.mode(WIFI_STA);
+    // Radio is enabled before sampling the hardware RNG. This identity lives
+    // for exactly this firmware boot; reconnect/AP changes never replace it.
+    uint8_t random[16];
+    esp_fill_random(random, sizeof(random));
+    char bootId[33];
+    constexpr char hex[] = "0123456789abcdef";
+    for (size_t i = 0; i < sizeof(random); ++i) {
+        bootId[2 * i] = hex[random[i] >> 4];
+        bootId[2 * i + 1] = hex[random[i] & 15];
+    }
+    bootId[32] = '\0';
+    xReference.beginBoot(bootId, config->inverted);
     deviceId = "microfantasy-" + WiFi.macAddress();
     deviceId.replace(":", ""); deviceId.toLowerCase();
     WifiProvisioning::begin(configuration);
@@ -210,7 +262,7 @@ void MachineNetwork::begin(Configuration& configuration) {
     http.on("/connecttest.txt", HTTP_GET, setupPage);
     http.on("/favicon.ico", HTTP_GET, [] { http.send(204); });
     http.on("/api/v1/info", HTTP_GET, [] {
-        JsonDocument doc; identity(doc); reply(200, doc);
+        JsonDocument doc; identity(doc, capture()); reply(200, doc);
     });
     // Browser discovery bridge. Only active sensor clients become candidates;
     // V90 verifies each candidate's /api/v1/status before offering it to the user.
@@ -223,8 +275,7 @@ void MachineNetwork::begin(Configuration& configuration) {
     http.on("/api/v1/apps", HTTP_GET, [] {
         http.sendHeader("Access-Control-Allow-Origin", "*");
         JsonDocument doc;
-        doc["service"] = "microfantasy-machine";
-        doc["api_version"] = 1;
+        identity(doc, capture());
         JsonArray apps = doc["apps"].to<JsonArray>();
         for (uint8_t client = 0; client < WEBSOCKETS_SERVER_CLIENT_MAX; ++client) {
             if (ws.clientIsConnected(client)) {
@@ -236,6 +287,7 @@ void MachineNetwork::begin(Configuration& configuration) {
     http.on("/api/v1/setup", HTTP_GET, [] {
         if (!setupRequest()) { http.send(403); return; }
         JsonDocument doc;
+        identity(doc, capture());
         doc["device"] = "MicroFantasy"; doc["schemaVersion"] = 1;
         doc["connected"] = WiFi.status() == WL_CONNECTED && !WifiProvisioning::configuring() && !*WifiProvisioning::error();
         doc["connecting"] = WifiProvisioning::configuring();
@@ -279,8 +331,7 @@ void MachineNetwork::begin(Configuration& configuration) {
     ws.onEvent([](uint8_t client, WStype_t type, uint8_t* data, size_t length) {
         if (type == WStype_CONNECTED) {
             if (String(reinterpret_cast<char*>(data)) != "/ws") { ws.disconnect(client); return; }
-            status(client);
-            position(client, millis());
+            publish(client, capture());
         } else if (type == WStype_TEXT) command(client, data, length);
     });
     ws.enableHeartbeat(3000, 1500, 2);
@@ -298,16 +349,17 @@ void MachineNetwork::tick() {
     ws.loop();
     if (now - lastFrame >= 34) { // About 29 Hz, including when stationary.
         lastFrame = now;
-        if (ws.connectedClients()) position(255, now);
+        if (ws.connectedClients()) position(255, capture());
     }
     discoveryTick(now);
     http.handleClient();
     if (now - lastStatus >= 1000) {
         lastStatus = now;
         const auto sample = Encoder::read();
+        const auto frame = capture(sample);
         Serial.printf("X: %.3f mm | count: %lld | invalid: %lu\n",
-            positionMm(sample.count, zero, config->inverted), (long long)sample.count,
+            frame.x.xMm, (long long)sample.count,
             (unsigned long)sample.invalidTransitions);
-        status(255);
+        status(255, frame);
     }
 }

@@ -25,9 +25,18 @@ enum Esp32ConnectionState {
 }
 
 class Esp32Position {
-  const Esp32Position({required this.xMm, required this.receivedAt});
+  const Esp32Position({
+    required this.xMm,
+    required this.receivedAt,
+    this.bootId,
+    this.referenceId,
+    this.referenceRevision,
+  });
   final double xMm;
   final DateTime receivedAt;
+  final String? bootId;
+  final String? referenceId;
+  final int? referenceRevision;
 }
 
 class Esp32Status {
@@ -38,6 +47,10 @@ class Esp32Status {
     this.deviceStatus,
     this.reconnectAttempt = 0,
     this.deviceId,
+    this.bootId,
+    this.referenceId,
+    this.referenceRevision,
+    this.supportsXReference = false,
   });
   final Esp32ConnectionState state;
   final String? message;
@@ -45,5 +58,32 @@ class Esp32Status {
   final String? deviceStatus;
   final int reconnectAttempt;
   final String? deviceId;
+  final String? bootId;
+  final String? referenceId;
+  final int? referenceRevision;
+  final bool supportsXReference;
   bool get isConnected => state == Esp32ConnectionState.connected;
+}
+
+/// Optional capability. Assigns a coordinate only after an explicit physical
+/// user confirmation; never controls or moves an axis.
+abstract interface class XReferenceEsp32Service {
+  Future<XReferenceAck> setXReference({
+    required String bootId,
+    required String referenceId,
+    required double xMm,
+  });
+}
+
+class XReferenceAck {
+  const XReferenceAck({
+    required this.bootId,
+    required this.referenceId,
+    required this.revision,
+    required this.xMm,
+  });
+  final String bootId;
+  final String referenceId;
+  final int revision;
+  final double xMm;
 }

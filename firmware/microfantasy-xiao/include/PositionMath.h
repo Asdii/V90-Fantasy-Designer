@@ -17,5 +17,10 @@ int8_t quadratureDelta(uint8_t before, uint8_t after) {
 }
 
 inline double positionMm(int64_t count, int64_t zero, bool inverted) {
-    return static_cast<double>(count - zero) / COUNTS_PER_MM * (inverted ? -1.0 : 1.0);
+    // Unsigned subtraction avoids signed overflow at opposite int64 extremes,
+    // without losing one-count deltas near a large shared origin.
+    const double delta = count >= zero
+        ? static_cast<double>(static_cast<uint64_t>(count) - static_cast<uint64_t>(zero))
+        : -static_cast<double>(static_cast<uint64_t>(zero) - static_cast<uint64_t>(count));
+    return delta / COUNTS_PER_MM * (inverted ? -1.0 : 1.0);
 }

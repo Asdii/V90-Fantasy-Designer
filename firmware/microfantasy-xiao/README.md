@@ -45,6 +45,11 @@ muy larga. La ubicación predeterminada `C:\Users\tu_usuario\.platformio` sirve.
 Dependencias fijadas: Espressif32 6.12.0 (Arduino ESP32 2.0.17),
 arduinoWebSockets 2.7.1, ArduinoJson 7.4.2. No se usa OTA en esta primera versión.
 
+La referencia X descrita aquí requiere **actualizar firmware y app**. La app
+debe comprobar `capabilities: ["set_x_reference"]`; una versión antigua del
+firmware no puede confirmar el anclaje manual. Actualizar/reiniciar el ESP32
+conserva Wi-Fi y dirección, pero requiere volver a referenciar X físicamente.
+
 ## Primera conexión desde el celular
 
 1. El ESP32 crea la red MicroFantasy-XXXXXX con password **fantasy123**.
@@ -100,13 +105,17 @@ La hoja de datos AS5311 rev. 1.13, sección 7, especifica 256 ciclos/canal y
 **1024 flancos por par de polos de 2 mm**, incluyendo cuadratura. Por eso:
 
 ```text
-x_mm = (contador - cero) / 512.0
+x_mm = signo * ((contador - cuenta_ancla) / 512.0 + offset_mm)
+signo = inverted ? -1 : 1
+al anclar: cuenta_ancla = contador_actual; offset_mm = signo * x_solicitado
 ```
 
 No multiplicar nuevamente por cuatro. Resolución nominal: 0.001953125 mm por
 cuenta. El bit absoluto SSI de 0.000488 mm no es la resolución A/B.
-Se aplica el signo invertido después de restar el cero. El cero se pierde al
-reiniciar; el sensor es incremental, no conserva el recorrido absoluto apagado.
+Se aplica el signo también al offset. El contador físico nunca se modifica al
+anclar ni al poner cero. Se permiten coordenadas entre cuentas, sin redondearlas
+al pulso más cercano. El anclaje se pierde al reiniciar; el sensor es incremental,
+no conserva el recorrido absoluto apagado.
 
 Los saltos inválidos (cambian A y B a la vez) se cuentan en diagnóstico y no se
 convierten en desplazamientos inventados. No se añade debounce temporal que
@@ -115,15 +124,42 @@ lo que **no puede confirmarse presencia del sensor ni calidad del campo**:
 `sensor: unverified` es deliberado, no un error por estar quieto.
 `transition_warning` indica que hubo saltos ilegales desde el arranque.
 
+## Centro calibrado y referencia después de cada arranque
+
+1. Calibra el **centro físico** en la app y guarda las coordenadas de los topes
+   negativo y positivo respecto de ese centro. Los recorridos pueden ser
+   asimétricos (por ejemplo, -37.25 mm y +83 mm); no se calcula el centro como
+   promedio de los topes. La app conserva esa calibración y su `reference_id`.
+2. En cada arranque real del ESP32, `boot_id` cambia, `reference_id` es `null` y
+   `reference_revision` vale 0. Las posiciones iniciales son provisionales;
+   **conectar Wi-Fi no equivale a tener X referenciada**.
+3. Lleva manualmente el carro al tope elegido y pulsa explícitamente en la app
+   el botón de confirmar que estás en ese tope. La app envía su coordenada
+   guardada, el `reference_id` de calibración, el `boot_id` vigente y un
+   `request_id` nuevo. También se admite anclar en 0 al confirmar el centro.
+4. La app valida el ACK y las muestras con la misma identidad de arranque,
+   referencia y revisión antes de usar la coordenada. No envía anclajes ni
+   reintentos automáticos al iniciar, reconectar o vencer un timeout. Si no
+   conoce el resultado, consulta la telemetría y requiere una nueva acción
+   manual en el tope para repetir con un ID nuevo.
+
+Perder Wi-Fi, cambiar de IP, reabrir el AP o reconectar WebSocket **no** cambia
+`boot_id`, la referencia, su revisión, el offset ni el contador. El sensor sigue
+contando durante la desconexión. La referencia y los recibos de comandos viven
+solo en RAM: no se escriben coordenadas, pulsos ni revisiones continuamente en
+NVS. Los topes guardados por la app son puntos de referencia, no límites de
+movimiento impuestos por este medidor. No hay comandos de motor.
+
 ## WebSocket
 
 `ws://fantasy-machine.local:81/ws`, o `ws://IP:81/ws`.
 Aproximadamente 29 frames/s (intervalo de 34 ms), incluso sin movimiento;
 diagnóstico Serial una vez por segundo. Al conectar se envían identidad y una
-lectura inmediatamente. `zero_x` también publica la nueva posición de inmediato.
+lectura inmediatamente, tomadas de una misma instantánea. Cada respuesta de
+referencia y cada comando legado aceptado publica status y posición de inmediato.
 
 ```json
-{"type":"position","x_mm":-16.103515625,"timestamp":12345}
+{"type":"position","x_mm":-16.103515625,"timestamp":12345,"boot_id":"fd5e876ef5270419ee7d641f744934d8","reference_id":"calibracion-1","reference_revision":1}
 ```
 
 `timestamp` es uptime en ms (uint32; vuelve a cero cada ~49 días). La app usa
@@ -131,24 +167,81 @@ su hora de recepción para detectar datos obsoletos. No se suaviza el dato real.
 Al conectar y una vez por segundo:
 
 ```json
-{"type":"status","connected":true,"service":"microfantasy-machine","api_version":1,"device_id":"microfantasy-aabbccddeeff","hostname":"fantasy-machine.local","ip":"192.168.1.82","ws_port":81,"ws_path":"/ws","status":"incremental_ready","sensor":"unverified","wifi":"ok","inverted":false,"counts_per_mm":512}
+{"type":"status","connected":true,"service":"microfantasy-machine","api_version":1,"device_id":"microfantasy-aabbccddeeff","hostname":"fantasy-machine.local","ip":"192.168.1.82","ws_port":81,"ws_path":"/ws","status":"incremental_ready","sensor":"unverified","wifi":"ok","inverted":false,"counts_per_mm":512,"boot_id":"fd5e876ef5270419ee7d641f744934d8","reference_id":"calibracion-1","reference_revision":1,"capabilities":["set_x_reference"]}
 ```
 
+`boot_id` es un identificador aleatorio de 128 bits generado una vez por arranque,
+representado como 32 caracteres ASCII hexadecimales (contrato: máximo 80).
+Todos los mensajes `position`, la identidad HTTP/UDP y todos los `status`, incluso
+los errores, llevan `boot_id`, `reference_id` y `reference_revision`. La revisión
+es un entero no negativo que aumenta con cada anclaje nuevo aceptado, `zero_x` y
+cambio efectivo de dirección. Mover el carro no aumenta la revisión.
+
 `connected` confirma disponibilidad del transporte, no la presencia física del
-AS5311. Comandos aceptados:
+AS5311 ni una referencia válida. Comando de anclaje:
+
+```json
+{"type":"set_x_reference","request_id":"anclaje-1","boot_id":"fd5e876ef5270419ee7d641f744934d8","reference_id":"calibracion-1","x_mm":-37.25}
+```
+
+Se exige un objeto JSON con exactamente esos cinco campos. Los tres IDs siguen
+`^[A-Za-z0-9_.:-]{1,80}$`, igual que la app: ASCII portable, no vacío, máximo 80
+caracteres. `boot_id` debe coincidir con el arranque vigente. `x_mm` es un número
+JSON finito, con `abs(x_mm) <= 10000`; no se convierten cadenas, booleanos o null
+a números. Se rechazan claves duplicadas, campos extra, datos después del objeto
+y mensajes mayores de 2048 bytes. Ese tamaño admite tres IDs de 80 caracteres
+aun usando escapes JSON completos.
+
+Solo el cliente que inició el comando recibe el ACK, **antes** de difundir status
+y posición a todos los clientes. Ejemplo de aceptación:
+
+```json
+{"type":"reference_ack","request_id":"anclaje-1","accepted":true,"boot_id":"fd5e876ef5270419ee7d641f744934d8","reference_id":"calibracion-1","reference_revision":1,"x_mm":-37.25}
+```
+
+En una aceptación nueva, `x_mm` es la coordenada solicitada en el conteo capturado
+al anclar, aunque el carro se mueva mientras se transmite. La salida numérica
+conserva precisión muy superior a 1e-6 mm dentro del rango admitido. Status y
+posición inmediatos comparten la misma instantánea. Cada frame periódico usa
+una captura coherente de coordenada/referencia/revisión.
+
+Un rechazo lleva `accepted: false`, `error` y la referencia/revisión/coordenada
+actuales; no modifica el estado. Errores: `invalid_request_id`, `invalid_boot_id`,
+`invalid_reference_id`, `invalid_x_mm`, `unsupported_x`, `wrong_boot`,
+`request_id_conflict`, `invalid_command`, `invalid_json`, `payload_too_large`.
+Si no puede recuperarse un ID válido (incluido JSON malformado), el ACK usa
+`request_id: ""`. Después del rechazo también se difunden status y posición.
+
+Se conservan en RAM los **últimos 16 anclajes exitosos**, en orden de aceptación,
+durante el mismo arranque. Repetir su `request_id` con el mismo contenido devuelve
+exactamente el ACK original, sin volver a anclar, incrementar la revisión ni
+reescribir NVS. Cambiar la coordenada o el `reference_id` con un ID almacenado
+devuelve `request_id_conflict`; un arranque distinto devuelve `wrong_boot`.
+Ni `zero_x` ni un cambio de dirección borran estos recibos. Un ACK duplicado
+puede describir una revisión antigua: la difusión posterior describe el estado
+actual. Los recibos más antiguos se expulsan; la app nunca debe reintentarlos
+automáticamente ni reutilizar IDs para acciones manuales nuevas.
+
+Comandos legados:
 
 ```json
 {"type":"zero_x"}
 {"type":"set_direction","inverted":true}
 ```
 
-La dirección se persiste solo si cambia. El cero solo modifica un offset RAM.
-Comandos desconocidos se rechazan con status `invalid_command`; un fallo NVS
-devuelve `storage_error`. JSON inválido se ignora; no ejecuta ninguna acción.
-No existen comandos de movimiento.
+`zero_x` ajusta únicamente el origen RAM, invalida `reference_id` (null) e
+incrementa la revisión, incluso si ya se estaba en cero. La dirección se persiste
+solo si cambia; un cambio exitoso niega toda la coordenada, invalida la referencia
+e incrementa la revisión. Repetir la misma dirección no modifica esos campos ni
+escribe NVS. Si falla la persistencia, se restaura la dirección y se conserva la
+referencia/revisión; se devuelve status `storage_error`. Comandos desconocidos
+se rechazan con status `invalid_command`. JSON inválido no ejecuta ninguna acción.
 
 MicroFantasy ya invierte X en la app mediante su ajuste de dirección. **Mantén
 la dirección del firmware normal si usas ese ajuste**, para no invertir dos veces.
+`x_mm` del comando siempre está expresado en el sistema de coordenadas de la
+telemetría del firmware; la app debe convertir cualquier inversión propia antes
+de enviar una coordenada de tope.
 El servicio Dart permite `zero_x` con `allowZeroX: true`; la UI no lo envía
 automáticamente porque cambiar el cero invalida la referencia de calibración.
 
@@ -159,7 +252,8 @@ mantiene al reiniciar o cambiar de red. La app recuerda esa identidad y verifica
 la dirección antes de usarla, en lugar de reconectar indefinidamente a una IP vieja.
 
 - `GET /api/v1/info` devuelve los campos de identidad del mensaje anterior,
-  sin credenciales y con `Cache-Control: no-store`, en LAN o en el AP.
+  incluidos referencia, revisión, arranque y `capabilities`, sin credenciales y
+  con `Cache-Control: no-store`, en LAN o en el AP.
 - DNS-SD anuncia `_fantasy-machine._tcp` en el puerto 81, con TXT `id`, `path`
   y `api_version`. Se renueva el anuncio si cambia la IP.
 - Respaldo UDP local: puerto **42190**. Petición
@@ -210,16 +304,29 @@ No exponer puertos 80/81 a Internet. NVS no está cifrada en esta primera versi�
 ## Pruebas
 
 El workflow `Check MicroFantasy firmware` compila para el XIAO y ejecuta pruebas
-de matemática del contador y recuperación de configuración Wi-Fi. En Linux/macOS:
+de matemática del contador, estado/protocolo de referencia X y recuperación Wi-Fi.
+Las pruebas de estado son C++11 puro; las del protocolo usan los headers de la
+misma versión ArduinoJson que instala la compilación PlatformIO. En Linux/macOS,
+desde la raíz del repositorio (compila antes el firmware para obtener esos headers):
 
 ```sh
 c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/position_test.cpp -o /tmp/position-test
 /tmp/position-test
+c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/x_reference_test.cpp -o /tmp/x-reference-test
+/tmp/x-reference-test
+c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include -Ifirmware/microfantasy-xiao/.pio/libdeps/xiao_esp32c3/ArduinoJson/src firmware/microfantasy-xiao/test/x_reference_protocol_test.cpp -o /tmp/x-reference-protocol-test
+/tmp/x-reference-protocol-test
 c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_setup_test.cpp -o /tmp/wifi-setup-test
 /tmp/wifi-setup-test
 c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_reconnect_test.cpp -o /tmp/wifi-reconnect-test
 /tmp/wifi-reconnect-test
 ```
+
+La suite X cubre topes negativos/positivos, centro cero, recorrido asimétrico,
+ambas inversiones, anclajes fraccionarios y cuentas grandes, validación estricta,
+arranque incorrecto, ACK idempotente tras movimiento u otros comandos, conflictos
+de payload, caché acotada, invalidación legada, reset frente a continuidad Wi-Fi,
+serialización numérica, IDs máximos/escapados y metadatos coherentes.
 
 Las pruebas móviles cubren validación de credenciales, HTTP real contra un
 servidor de prueba, confirmación de conexión, bloqueo de redirects, compatibilidad
@@ -229,7 +336,9 @@ de telemetría y reconexión WebSocket. No sustituyen la prueba eléctrica:
 2. Prueba ambos sentidos, cero e inversión.
 3. Comprueba `invalid: 0` con la máxima velocidad manual prevista y Wi-Fi activo.
 4. Déjalo quieto: llegan datos a aproximadamente 29 Hz sin error por inactividad.
-5. Apaga/enciende: recupera Wi-Fi y dirección; X vuelve a la referencia de arranque.
+5. Apaga/enciende: recupera Wi-Fi y dirección; cambia `boot_id`, vuelve a revisión
+   0 y `reference_id: null`. Confirma manualmente un tope para recuperar el marco
+   calibrado. Repite en ambos topes, incluido un rango asimétrico.
 6. Prueba contraseña incorrecta, recuperación de red y reconexión de la app.
 7. Con un SSID unificado, selecciona la red desde la lista, espera confirmación,
    reinicia el ESP32 y comprueba la reconexión. Verifica también interrupción
@@ -237,6 +346,10 @@ de telemetría y reconexión WebSocket. No sustituyen la prueba eléctrica:
 8. Comprueba que la IP mostrada en la app coincide con Serial. Después de un
    cambio de IP o de red del teléfono, debe recuperar la misma placa sin escribir
    la nueva dirección. Cierra/abre la app y comprueba que conserva paso y calibración.
+9. Referencia X y corta solo Wi-Fi; mueve el carro y reconecta: conserva arranque,
+   referencia y revisión, e incorpora el movimiento durante el corte. Con dos
+   clientes, confirma que solo el iniciador recibe ACK y ambos reciben status y
+   posición. Repite el mismo comando tras mover: el ACK original no debe reanclar.
 
 La velocidad máxima real y la pérdida de pulsos bajo carga deben medirse con
 hardware. Esta implementación por ISR no promete los 650 mm/s máximos del chip.

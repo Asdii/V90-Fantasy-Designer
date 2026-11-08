@@ -124,10 +124,12 @@ class _CalibrationScreenState extends State<CalibrationScreen>
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Text('Calibración de X', style: theme.textTheme.titleLarge),
+                Text('Calibración R', style: theme.textTheme.titleLarge),
                 const SizedBox(height: 6),
                 Text(
-                  'Cada punto se guarda automáticamente y se usa para compensar X.',
+                  c.machineConnected && c.xNeedsReference
+                      ? 'Primero recupera el centro físico en Calibración X. Después podrás guardar puntos de R.'
+                      : 'Cada punto se guarda automáticamente y compensa X según el ángulo R.',
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: colors.onSurfaceVariant,
                   ),

@@ -13,7 +13,7 @@ import 'package:microfantasy/repositories/key_value_store.dart';
 import 'package:microfantasy/services/fantasy_designer/local_receiver_service.dart';
 
 void main() {
-  testWidgets('capture three mobile screens', (tester) async {
+  testWidgets('capture four mobile screens', (tester) async {
     tester.view.physicalSize = const Size(390, 844);
     tester.view.devicePixelRatio = 1;
     addTearDown(tester.view.resetPhysicalSize);
@@ -61,17 +61,41 @@ void main() {
       find.byType(MicroFantasyApp),
       matchesGoldenFile('../build/qa/cut.png'),
     );
-    await tester.tap(find.text('Calibración'));
+    await tester.tap(find.byKey(const ValueKey('app-tab-1')));
     await tester.pump(const Duration(milliseconds: 500));
     await expectLater(
       find.byType(MicroFantasyApp),
       matchesGoldenFile('../build/qa/calibration.png'),
     );
-    await tester.tap(find.text('Configuración'));
+    await tester.tap(find.byKey(const ValueKey('app-tab-3')));
     await tester.pump(const Duration(milliseconds: 500));
     await expectLater(
       find.byType(MicroFantasyApp),
       matchesGoldenFile('../build/qa/settings.png'),
+    );
+    await tester.tap(find.byKey(const ValueKey('app-tab-2')));
+    await tester.pump(const Duration(milliseconds: 500));
+    await expectLater(
+      find.byType(MicroFantasyApp),
+      matchesGoldenFile('../build/qa/x-calibration-setup.png'),
+    );
+    await tester.runAsync(() async {
+      c.simulateX(12);
+      await Future<void>.delayed(Duration.zero);
+      await c.captureXCenter();
+      c.simulateX(-32.125);
+      await Future<void>.delayed(Duration.zero);
+      await c.captureXNegative();
+      c.simulateX(45.375);
+      await Future<void>.delayed(Duration.zero);
+      await c.captureXPositive();
+      c.simulateX(-8);
+      await Future<void>.delayed(Duration.zero);
+    });
+    await tester.pump(const Duration(milliseconds: 500));
+    await expectLater(
+      find.byType(MicroFantasyApp),
+      matchesGoldenFile('../build/qa/x-calibration-complete.png'),
     );
     await tester.runAsync(() async {
       final json = jsonDecode(

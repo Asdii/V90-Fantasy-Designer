@@ -158,6 +158,11 @@ class CutScreen extends StatelessWidget {
       toleranceMm: c.settings.tolerance,
       smoothing: c.settings.smoothing.name,
       centimeters: c.settings.units.name == 'cm',
+      unavailableLabel: c.machineConnected && c.xNeedsReference
+          ? c.xCalibration == null
+                ? 'Define el centro en Calibración X'
+                : 'Confirma un tope en Calibración X'
+          : 'Sin conexión',
     );
     final navigation = Padding(
       padding: const EdgeInsets.only(top: 8),

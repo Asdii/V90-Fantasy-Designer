@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'esp32_service.dart';
+import 'esp32_protocol.dart';
 
-class MockEsp32Service implements Esp32Service {
+class MockEsp32Service implements Esp32Service, XReferenceEsp32Service {
   MockEsp32Service({
     double initialPositionMm = 0,
     this.telemetryInterval = const Duration(milliseconds: 100),
@@ -29,6 +30,9 @@ class MockEsp32Service implements Esp32Service {
   Timer? _timer;
   Timer? _heartbeat;
   bool _disposed = false;
+  String _bootId = 'mock-${DateTime.now().microsecondsSinceEpoch}';
+  String? _referenceId;
+  int _referenceRevision = 0;
 
   @override
   Stream<Esp32Position> get positionStream => _positions.stream;
@@ -48,9 +52,14 @@ class MockEsp32Service implements Esp32Service {
       endpoint: endpoint,
       message: 'Simulated encoder',
       deviceStatus: 'simulation',
+      deviceId: 'microfantasy-simulation',
+      bootId: _bootId,
+      referenceId: _referenceId,
+      referenceRevision: _referenceRevision,
+      supportsXReference: true,
     );
     _statuses.add(_status);
-    _positions.add(_position!);
+    _emitPosition(_position!.xMm);
     _heartbeat?.cancel();
     _heartbeat = Timer.periodic(telemetryInterval, (_) {
       if (!isSimulating) _emitPosition(_position!.xMm);
@@ -103,7 +112,44 @@ class MockEsp32Service implements Esp32Service {
   Future<void> zeroX() async {
     _checkAlive();
     if (!_status.isConnected) throw StateError('Mock is disconnected');
+    _referenceId = null;
+    _referenceRevision++;
     setPosition(0);
+    await connect(_status.endpoint);
+  }
+
+  @override
+  Future<XReferenceAck> setXReference({
+    required String bootId,
+    required String referenceId,
+    required double xMm,
+  }) async {
+    _checkAlive();
+    validateXReference(bootId, referenceId, xMm);
+    if (!_status.isConnected || bootId != _bootId) {
+      throw StateError('La máquina se desconectó o reinició.');
+    }
+    _referenceId = referenceId;
+    _referenceRevision++;
+    setPosition(xMm);
+    await connect(_status.endpoint);
+    return XReferenceAck(
+      bootId: _bootId,
+      referenceId: referenceId,
+      revision: _referenceRevision,
+      xMm: xMm,
+    );
+  }
+
+  /// A power cycle loses the encoder reference, unlike a network disconnect.
+  Future<void> simulateRestart() async {
+    final endpoint = _status.endpoint;
+    await disconnect();
+    _bootId = 'mock-${DateTime.now().microsecondsSinceEpoch}';
+    _referenceId = null;
+    _referenceRevision = 0;
+    _position = Esp32Position(xMm: 0, receivedAt: DateTime.now());
+    await connect(endpoint);
   }
 
   @override
@@ -125,7 +171,13 @@ class MockEsp32Service implements Esp32Service {
   }
 
   void _emitPosition(double xMm) {
-    _position = Esp32Position(xMm: xMm, receivedAt: DateTime.now());
+    _position = Esp32Position(
+      xMm: xMm,
+      receivedAt: DateTime.now(),
+      bootId: _bootId,
+      referenceId: _referenceId,
+      referenceRevision: _referenceRevision,
+    );
     _positions.add(_position!);
   }
 

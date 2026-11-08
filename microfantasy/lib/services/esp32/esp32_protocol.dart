@@ -2,11 +2,31 @@ import 'dart:convert';
 
 /// Decoding is independent from networking so native and simulated inputs agree.
 class Esp32Telemetry {
-  const Esp32Telemetry({this.xMm, this.status, this.connected, this.deviceId});
+  const Esp32Telemetry({
+    this.xMm,
+    this.status,
+    this.connected,
+    this.deviceId,
+    this.bootId,
+    this.referenceId,
+    this.referenceRevision,
+    this.supportsXReference,
+    this.requestId,
+    this.accepted,
+    this.error,
+  });
   final double? xMm;
   final String? status;
   final bool? connected;
   final String? deviceId;
+  final String? bootId;
+  final String? referenceId;
+  final int? referenceRevision;
+  final bool? supportsXReference;
+  final String? requestId;
+  final bool? accepted;
+  final String? error;
+  bool get isReferenceAck => requestId != null;
 
   factory Esp32Telemetry.decode(Object? message, {int maxBytes = 16 * 1024}) {
     final String text;
@@ -28,13 +48,40 @@ class Esp32Telemetry {
       throw const FormatException('Telemetry must be a JSON object');
     }
     final type = value['type'];
-    if (type != null && type != 'position' && type != 'status') {
+    if (type != null &&
+        type != 'position' &&
+        type != 'status' &&
+        type != 'reference_ack') {
       throw const FormatException('Unsupported telemetry type');
     }
     final rawX = value['x_mm'];
     final rawStatus = value['status'];
     final rawConnected = value['connected'];
     final deviceId = value['device_id'];
+    final bootId = value['boot_id'];
+    final referenceId = value['reference_id'];
+    final revision = value['reference_revision'];
+    final capabilities = value['capabilities'];
+    final requestId = value['request_id'];
+    final accepted = value['accepted'];
+    if ((bootId != null && !validReferenceIdentifier(bootId)) ||
+        (referenceId != null && !validReferenceIdentifier(referenceId)) ||
+        (revision != null && (revision is! int || revision < 0)) ||
+        (bootId != null && revision == null) ||
+        (bootId == null && (referenceId != null || revision != null))) {
+      throw const FormatException('Invalid X reference metadata');
+    }
+    if (capabilities != null &&
+        (capabilities is! List || capabilities.any((c) => c is! String))) {
+      throw const FormatException('Invalid capabilities');
+    }
+    if (type == 'reference_ack' &&
+        (!validReferenceIdentifier(requestId) ||
+            accepted is! bool ||
+            bootId == null ||
+            (accepted && (referenceId == null || rawX == null)))) {
+      throw const FormatException('Invalid reference acknowledgement');
+    }
     if (deviceId != null &&
         (deviceId is! String ||
             deviceId.isEmpty ||
@@ -57,7 +104,10 @@ class Esp32Telemetry {
     }
     if ((type == 'position' && rawX == null) ||
         (type == 'status' && rawStatus == null && rawConnected == null) ||
-        (rawX == null && rawStatus == null && rawConnected == null)) {
+        (type != 'reference_ack' &&
+            rawX == null &&
+            rawStatus == null &&
+            rawConnected == null)) {
       throw const FormatException('Missing telemetry fields');
     }
     return Esp32Telemetry(
@@ -65,7 +115,28 @@ class Esp32Telemetry {
       status: rawStatus as String?,
       connected: rawConnected as bool?,
       deviceId: deviceId as String?,
+      bootId: bootId as String?,
+      referenceId: referenceId as String?,
+      referenceRevision: revision as int?,
+      supportsXReference: capabilities == null
+          ? null
+          : (capabilities as List).contains('set_x_reference'),
+      requestId: type == 'reference_ack' ? requestId as String : null,
+      accepted: type == 'reference_ack' ? accepted as bool : null,
+      error: value['error'] is String ? value['error'] as String : null,
     );
+  }
+}
+
+bool validReferenceIdentifier(Object? value) =>
+    value is String && RegExp(r'^[A-Za-z0-9_.:-]{1,80}$').hasMatch(value);
+
+void validateXReference(String bootId, String referenceId, double xMm) {
+  if (!validReferenceIdentifier(bootId) ||
+      !validReferenceIdentifier(referenceId) ||
+      !xMm.isFinite ||
+      xMm.abs() > 10000) {
+    throw ArgumentError('Invalid physical X reference');
   }
 }
 

@@ -1,9 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../models/models.dart';
 import '../models/job_progress.dart';
+import '../models/x_axis_calibration.dart';
+import '../repositories/x_axis_repository.dart';
 import '../repositories/key_value_store.dart';
 import '../repositories/job_repository.dart';
 import '../repositories/settings_repository.dart';
@@ -28,7 +31,8 @@ class AppController extends ChangeNotifier {
        updates = UpdateController(store, updateService),
        jobs = JobRepository(store),
        preferences = SettingsRepository(store),
-       calibrations = CalibrationRepository(store);
+       calibrations = CalibrationRepository(store),
+       xAxes = XAxisRepository(store);
   final KeyValueStore store;
   final FantasyDesignerService designer;
   final Esp32Service Function(AppSettings settings)? hardwareFactory;
@@ -37,6 +41,11 @@ class AppController extends ChangeNotifier {
   final JobRepository jobs;
   final SettingsRepository preferences;
   final CalibrationRepository calibrations;
+  final XAxisRepository xAxes;
+  final Map<String, AxisCalibration> _xAxes = {};
+  bool xCalibrationBusy = false;
+  String? xCalibrationMessage;
+  Esp32Position? _sensorPosition;
   final CalibrationService calibration = const CalibrationService();
   Esp32Service? _esp;
   final List<StreamSubscription<dynamic>> _subscriptions = [];
@@ -83,19 +92,52 @@ class AppController extends ChangeNotifier {
   double getCorrectedTargetX(CuttingStep step) =>
       step.x + getXOffsetForAngle(step.angleR);
   double get correctedTarget => step == null ? 0 : getCorrectedTargetX(step!);
-  double? get actualX {
+  double? get sensorX {
+    final status = _esp?.currentStatus;
     if (!(_esp?.currentStatus.isConnected ?? false) ||
         rawX == null ||
         _lastPosition == null ||
+        (status?.bootId != null &&
+            (_sensorPosition?.bootId != status?.bootId ||
+                _sensorPosition?.referenceRevision !=
+                    status?.referenceRevision ||
+                _sensorPosition?.referenceId != status?.referenceId)) ||
         DateTime.now().difference(_lastPosition!) > settings.timeout) {
       return null;
     }
     return rawX! * (settings.invertX ? -1 : 1);
   }
 
+  String? get _axisDeviceId => settings.simulation
+      ? 'microfantasy-simulation'
+      : _esp?.currentStatus.deviceId ?? settings.machineId;
+  AxisCalibration? get xCalibration => _xAxes[_axisDeviceId];
+  bool get machineConnected => sensorX != null;
+  bool get machineConnecting => _connecting > 0;
+  bool get xReferenceSupported =>
+      _esp is XReferenceEsp32Service &&
+      _esp?.currentStatus.supportsXReference == true;
+  bool get xAxisReady {
+    final axis = xCalibration;
+    final status = _esp?.currentStatus;
+    final position = _sensorPosition;
+    return axis != null &&
+        sensorX != null &&
+        status?.bootId != null &&
+        status?.referenceId == axis.referenceId &&
+        position?.bootId == status?.bootId &&
+        position?.referenceId == axis.referenceId &&
+        position?.referenceRevision == status?.referenceRevision;
+  }
+
+  bool get xNeedsReference =>
+      (xCalibration != null || (!settings.simulation && xReferenceSupported)) &&
+      !xAxisReady;
+  double? get actualX => xCalibrationBusy || xNeedsReference ? null : sensorX;
+
   String get connectionLabel => settings.simulation
       ? 'Simulación'
-      : actualX != null
+      : machineConnected
       ? 'Conectado'
       : _esp?.currentStatus.state == Esp32ConnectionState.reconnecting ||
             _esp?.currentStatus.state == Esp32ConnectionState.connecting
@@ -119,11 +161,14 @@ class AppController extends ChangeNotifier {
   Future<void> initialize() async {
     try {
       settings = await preferences.load();
+      for (final axis in await xAxes.load()) {
+        _xAxes[axis.deviceId] = axis;
+      }
       profiles = await calibrations.load();
       if (profiles.isEmpty) {
         final initial = CalibrationProfile(
           id: 'principal',
-          name: 'Calibración X',
+          name: 'Calibración R',
           referenceX: 0,
           points: [],
         );
@@ -135,7 +180,7 @@ class AppController extends ChangeNotifier {
         (p) => p.id == settings.activeProfileId,
         orElse: () => profiles.first,
       );
-      profiles = [selected.copyWith(name: 'Calibración X')];
+      profiles = [selected.copyWith(name: 'Calibración R')];
       await calibrations.replaceWith(profile);
       settings = settings.copyWith(activeProfileId: profile.id);
       await preferences.save(settings);
@@ -166,7 +211,7 @@ class AppController extends ChangeNotifier {
         profiles = [
           CalibrationProfile(
             id: 'principal',
-            name: 'Calibración X',
+            name: 'Calibración R',
             referenceX: 0,
             points: [],
           ),
@@ -211,6 +256,7 @@ class AppController extends ChangeNotifier {
     await _esp?.dispose();
     _esp = null;
     rawX = null;
+    _sensorPosition = null;
     _lastPosition = null;
     if (_disposed || (!_foreground && !settings.simulation)) return;
     final esp = settings.simulation
@@ -225,6 +271,7 @@ class AppController extends ChangeNotifier {
               );
     _esp = esp;
     _positionSub = esp.positionStream.listen((p) {
+      _sensorPosition = p;
       rawX = p.xMm;
       _lastPosition = p.receivedAt;
       final arrived =
@@ -285,6 +332,11 @@ class AppController extends ChangeNotifier {
           .toList();
       for (final p in profiles) {
         _queue(() => calibrations.save(p));
+      }
+      for (final item in _xAxes.entries.toList()) {
+        final inverted = item.value.inverted();
+        _xAxes[item.key] = inverted;
+        _queue(() => xAxes.save(inverted));
       }
     }
     settings = next;
@@ -483,7 +535,7 @@ class AppController extends ChangeNotifier {
     // Imported measurements replace this one calibration, never add a profile.
     final next = CalibrationProfile(
       id: profile.id,
-      name: 'Calibración X',
+      name: 'Calibración R',
       referenceX: imported.referenceX,
       points: imported.points,
     );
@@ -517,7 +569,7 @@ class AppController extends ChangeNotifier {
     final request = _receiverLifecycle.then((_) async {
       if (_disposed) return;
       if (!value && !settings.simulation) await _esp?.disconnect();
-      if (value && _foreground && !settings.simulation && actualX == null) {
+      if (value && _foreground && !settings.simulation && !machineConnected) {
         await _connect();
       }
       await designer.setForeground(value);
@@ -537,7 +589,126 @@ class AppController extends ChangeNotifier {
       return;
     }
     message('Buscando en la red local…');
-    await _connect();
+    await reconnectMachine();
+  });
+
+  /// A tap bypasses scheduled retry/backoff and performs fresh identity-based
+  /// discovery. It never resets the encoder or sends a remembered phone value.
+  Future<void> reconnectMachine() async {
+    if (machineConnecting || xCalibrationBusy) return;
+    await _run(_connect);
+  }
+
+  Future<void> _xAction(Future<void> Function() action) async {
+    if (xCalibrationBusy) return;
+    xCalibrationBusy = true;
+    xCalibrationMessage = null;
+    _refresh();
+    try {
+      await action();
+    } catch (e) {
+      final reason = switch (e) {
+        FormatException() => e.message,
+        StateError() => e.message,
+        TimeoutException() => e.message ?? 'La máquina no respondió.',
+        _ => 'Revisa la conexión e inténtalo de nuevo.',
+      };
+      debugPrint('X reference: $e');
+      xCalibrationMessage = 'No se pudo confirmar: $reason';
+    } finally {
+      xCalibrationBusy = false;
+      _arrived = false;
+      _refresh();
+    }
+  }
+
+  XReferenceEsp32Service _referenceService() {
+    final esp = _esp;
+    if (!machineConnected ||
+        !xReferenceSupported ||
+        esp is! XReferenceEsp32Service ||
+        _esp?.currentStatus.bootId == null) {
+      throw StateError('Conecta la máquina con el firmware actualizado.');
+    }
+    return esp as XReferenceEsp32Service;
+  }
+
+  Future<void> captureXCenter() => _xAction(() async {
+    final service = _referenceService();
+    final deviceId = _axisDeviceId!;
+    final bootId = _esp!.currentStatus.bootId!;
+    final before = sensorX!;
+    final wasReferenced = xCalibration == null || xAxisReady;
+    final candidate = AxisCalibration(
+      deviceId: deviceId,
+      referenceId:
+          'x-${DateTime.now().microsecondsSinceEpoch}-${math.Random.secure().nextInt(0x7fffffff)}',
+    );
+    // Persist the user's intended frame first. If the ACK is lost or the app
+    // closes, subsequent telemetry can confirm that exact frame. It never
+    // becomes usable merely because the phone saved a number.
+    await xAxes.save(candidate);
+    _xAxes[deviceId] = candidate;
+    if (wasReferenced && hasCalibrationReference) {
+      // Translate absolute R samples together; eccentricity offsets stay equal.
+      _saveProfile(
+        profile.copyWith(
+          referenceX: profile.referenceX - before,
+          points: profile.points
+              .map((p) => CalibrationPoint(angleR: p.angleR, x: p.x - before))
+              .toList(),
+        ),
+      );
+    }
+    await service.setXReference(
+      bootId: bootId,
+      referenceId: candidate.referenceId,
+      xMm: 0,
+    );
+    xCalibrationMessage =
+        'Centro guardado en 0.000 mm. Registra los dos topes.';
+  });
+
+  Future<void> captureXNegative() => _captureXStop(false);
+  Future<void> captureXPositive() => _captureXStop(true);
+  Future<void> _captureXStop(bool positive) => _xAction(() async {
+    if (!xAxisReady) {
+      throw StateError(
+        'Establece el centro o recupera un tope antes de medir.',
+      );
+    }
+    final axis = xCalibration!;
+    final next = axis.withStop(positive: positive, value: sensorX!);
+    await xAxes.save(next);
+    _xAxes[axis.deviceId] = next;
+    xCalibrationMessage = next.isComplete
+        ? 'Recorrido guardado. El centro físico está listo.'
+        : 'Tope ${positive ? '+' : '−'} guardado. Registra el otro extremo.';
+  });
+
+  Future<void> referenceXAtStop({required bool positive}) => _xAction(() async {
+    final service = _referenceService();
+    final axis = xCalibration;
+    final coordinate = positive ? axis?.positiveMm : axis?.negativeMm;
+    if (axis == null || coordinate == null) {
+      throw StateError('Este tope aún no tiene una distancia guardada.');
+    }
+    await service.setXReference(
+      bootId: _esp!.currentStatus.bootId!,
+      referenceId: axis.referenceId,
+      xMm: coordinate * (settings.invertX ? -1 : 1),
+    );
+    xCalibrationMessage =
+        'Tope confirmado. Mueve X hasta 0.000 mm para volver al centro.';
+  });
+
+  Future<void> resetXCalibration() => _xAction(() async {
+    final id = _axisDeviceId;
+    if (id == null) return;
+    await xAxes.delete(id);
+    _xAxes.remove(id);
+    xCalibrationMessage =
+        'Recorrido borrado. Sitúa la mesa en su centro para empezar.';
   });
   Future<void> testConnection() => _run(() async {
     await _connect();

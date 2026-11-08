@@ -14,6 +14,7 @@ class XPositionGuide extends StatefulWidget {
     required this.toleranceMm,
     required this.smoothing,
     required this.centimeters,
+    this.unavailableLabel = 'Sin conexión',
   });
 
   final double? actualMm;
@@ -21,6 +22,7 @@ class XPositionGuide extends StatefulWidget {
   final double toleranceMm;
   final String smoothing;
   final bool centimeters;
+  final String unavailableLabel;
 
   @override
   State<XPositionGuide> createState() => _XPositionGuideState();
@@ -136,7 +138,7 @@ class _XPositionGuideState extends State<XPositionGuide>
     final double? error = ready ? actual - widget.targetMm : null;
     final bool arrived = error != null && error.abs() <= widget.toleranceMm;
     final String status = actual == null
-        ? 'Sin conexión'
+        ? widget.unavailableLabel
         : !validTarget || !validTolerance
         ? 'Objetivo o tolerancia no válido'
         : arrived

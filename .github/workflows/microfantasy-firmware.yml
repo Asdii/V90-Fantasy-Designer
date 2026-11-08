@@ -27,6 +27,10 @@ jobs:
         run: |
           g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/position_test.cpp -o /tmp/position-test
           /tmp/position-test
+      - name: Test X reference state and retry safety
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/x_reference_test.cpp -o /tmp/x-reference-test
+          /tmp/x-reference-test
       - name: Test Wi-Fi provisioning recovery
         run: |
           g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_setup_test.cpp -o /tmp/wifi-setup-test
@@ -37,3 +41,7 @@ jobs:
           /tmp/wifi-reconnect-test
       - name: Build XIAO ESP32-C3 firmware
         run: pio run -d firmware/microfantasy-xiao -e xiao_esp32c3
+      - name: Test X reference wire contract with firmware ArduinoJson
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include -Ifirmware/microfantasy-xiao/.pio/libdeps/xiao_esp32c3/ArduinoJson/src firmware/microfantasy-xiao/test/x_reference_protocol_test.cpp -o /tmp/x-reference-protocol-test
+          /tmp/x-reference-protocol-test

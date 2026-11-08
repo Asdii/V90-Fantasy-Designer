@@ -7,7 +7,7 @@ import 'esp32_protocol.dart';
 import 'esp32_device.dart';
 import 'esp32_service.dart';
 
-class WebSocketEsp32Service implements Esp32Service {
+class WebSocketEsp32Service implements Esp32Service, XReferenceEsp32Service {
   WebSocketEsp32Service({
     this.allowZeroX = false,
     this.resolver,
@@ -33,6 +33,10 @@ class WebSocketEsp32Service implements Esp32Service {
   final Esp32EndpointResolver? resolver;
   String? _deviceId, _candidateId;
   bool _identityConfirmed = false;
+  String? _bootId, _referenceId;
+  int? _referenceRevision;
+  bool _supportsXReference = false;
+  _PendingReference? _referenceRequest;
   final Duration connectTimeout;
   final Duration telemetryTimeout;
   final Duration pingInterval;
@@ -96,6 +100,10 @@ class WebSocketEsp32Service implements Esp32Service {
     // result so a timed-out or stopped attempt cannot leak a live connection.
     try {
       _identityConfirmed = false;
+      _bootId = null;
+      _referenceId = null;
+      _referenceRevision = null;
+      _supportsXReference = false;
       _candidateId = _deviceId;
       if (resolver != null) {
         final device = await resolver!.resolve(_endpoint!, deviceId: _deviceId);
@@ -164,6 +172,11 @@ class WebSocketEsp32Service implements Esp32Service {
       // The new firmware identifies itself before its first position. A stale
       // DNS/HTTP result must not allow telemetry from a different board.
       if (_candidateId != null && !_identityConfirmed) return;
+      if (telemetry.isReferenceAck) {
+        _receiveReferenceAck(telemetry);
+        return;
+      }
+      if (!_applyReferenceMetadata(telemetry)) return;
       _attempt = 0; // Only valid telemetry resets backoff.
       _armTelemetryTimeout(generation, socket);
       if (telemetry.connected == false) {
@@ -184,6 +197,9 @@ class WebSocketEsp32Service implements Esp32Service {
         _position = Esp32Position(
           xMm: telemetry.xMm!,
           receivedAt: DateTime.now(),
+          bootId: telemetry.bootId,
+          referenceId: telemetry.referenceId,
+          referenceRevision: telemetry.referenceRevision,
         );
         _positions.add(_position!);
       }
@@ -240,8 +256,127 @@ class WebSocketEsp32Service implements Esp32Service {
       deviceStatus: deviceStatus,
       reconnectAttempt: _attempt,
       deviceId: _deviceId,
+      bootId: _bootId,
+      referenceId: _referenceId,
+      referenceRevision: _referenceRevision,
+      supportsXReference: _supportsXReference,
     );
     _statuses.add(_status);
+  }
+
+  // Ordered WS frames can still include samples generated before a command.
+  // Never let an older reference revision move the UI back into an old frame.
+  bool _applyReferenceMetadata(Esp32Telemetry value) {
+    if (value.bootId != null) {
+      if (_bootId == value.bootId &&
+          _referenceRevision != null &&
+          value.referenceRevision! < _referenceRevision!) {
+        return false;
+      }
+      if (_bootId != null && _bootId != value.bootId) {
+        _failReference('La máquina se reinició. Confirma de nuevo el tope.');
+        _position = null;
+      }
+      _bootId = value.bootId;
+      _referenceId = value.referenceId;
+      _referenceRevision = value.referenceRevision;
+    }
+    _supportsXReference = value.supportsXReference ?? _supportsXReference;
+    return true;
+  }
+
+  @override
+  Future<XReferenceAck> setXReference({
+    required String bootId,
+    required String referenceId,
+    required double xMm,
+  }) async {
+    validateXReference(bootId, referenceId, xMm);
+    final socket = _socket;
+    if (_disposed ||
+        !_status.isConnected ||
+        socket == null ||
+        socket.readyState != WebSocket.open ||
+        !_supportsXReference ||
+        _bootId != bootId) {
+      throw StateError(
+        'Conecta la máquina y actualiza su firmware para fijar X.',
+      );
+    }
+    if (_referenceRequest != null) {
+      throw StateError('Ya se está confirmando X.');
+    }
+    final request = _PendingReference(
+      '${DateTime.now().microsecondsSinceEpoch}-${math.Random.secure().nextInt(0x7fffffff)}',
+      bootId,
+      referenceId,
+      xMm,
+    );
+    _referenceRequest = request;
+    try {
+      socket.add(
+        jsonEncode({
+          'type': 'set_x_reference',
+          'request_id': request.id,
+          'boot_id': bootId,
+          'reference_id': referenceId,
+          'x_mm': xMm,
+        }),
+      );
+      return await request.result.future.timeout(
+        const Duration(seconds: 5),
+        onTimeout: () => throw TimeoutException(
+          'No llegó la confirmación. Mantén la mesa en el tope y vuelve a confirmar.',
+        ),
+      );
+    } finally {
+      if (identical(_referenceRequest, request)) _referenceRequest = null;
+    }
+  }
+
+  void _receiveReferenceAck(Esp32Telemetry telemetry) {
+    final pending = _referenceRequest;
+    // Ignore unsolicited/late acknowledgements: they are not user actions.
+    if (pending == null || telemetry.requestId != pending.id) return;
+    if (telemetry.accepted != true) {
+      _failReference(
+        'No se confirmó X: ${telemetry.error ?? 'reintenta en el tope'}.',
+      );
+      return;
+    }
+    if (telemetry.bootId != pending.bootId ||
+        telemetry.referenceId != pending.referenceId ||
+        (telemetry.xMm! - pending.xMm).abs() > 0.000001 ||
+        !_applyReferenceMetadata(telemetry)) {
+      _failReference('La referencia cambió durante la confirmación.');
+      return;
+    }
+    _position = Esp32Position(
+      xMm: telemetry.xMm!,
+      receivedAt: DateTime.now(),
+      bootId: telemetry.bootId,
+      referenceId: telemetry.referenceId,
+      referenceRevision: telemetry.referenceRevision,
+    );
+    _emit(Esp32ConnectionState.connected, deviceStatus: _status.deviceStatus);
+    _positions.add(_position!);
+    _referenceRequest = null;
+    pending.result.complete(
+      XReferenceAck(
+        bootId: telemetry.bootId!,
+        referenceId: telemetry.referenceId!,
+        revision: telemetry.referenceRevision!,
+        xMm: telemetry.xMm!,
+      ),
+    );
+  }
+
+  void _failReference(String reason) {
+    final pending = _referenceRequest;
+    _referenceRequest = null;
+    if (pending != null && !pending.result.isCompleted) {
+      pending.result.completeError(StateError(reason));
+    }
   }
 
   @override
@@ -277,6 +412,7 @@ class WebSocketEsp32Service implements Esp32Service {
   }
 
   Future<void> _closeSocket() async {
+    _failReference('Se perdió la conexión antes de confirmar X.');
     final subscription = _subscription;
     final socket = _socket;
     _subscription = null;
@@ -303,4 +439,11 @@ class WebSocketEsp32Service implements Esp32Service {
     _disposed = true;
     await Future.wait([_positions.close(), _statuses.close()]);
   }
+}
+
+class _PendingReference {
+  _PendingReference(this.id, this.bootId, this.referenceId, this.xMm);
+  final String id, bootId, referenceId;
+  final double xMm;
+  final result = Completer<XReferenceAck>();
 }
