@@ -15,7 +15,7 @@ class WebSocketEsp32Service
     String? deviceId,
     this.connectTimeout = const Duration(seconds: 5),
     this.telemetryTimeout = const Duration(seconds: 10),
-    this.pingInterval = const Duration(seconds: 5),
+    this.pingInterval = const Duration(seconds: 10),
     this.reconnectDelay = const Duration(seconds: 1),
     this.maxReconnectDelay = const Duration(seconds: 5),
   }) : _deviceId = deviceId {
@@ -138,6 +138,8 @@ class WebSocketEsp32Service
         return;
       }
       _socket = socket;
+      // Dart uses this interval as the pong deadline too. Two seconds was too
+      // short for transient phone scheduling/Wi-Fi roaming pauses.
       socket.pingInterval = pingInterval;
       // A transport handshake does not confirm the encoder is available.
       _position = null;
@@ -149,8 +151,12 @@ class WebSocketEsp32Service
       _subscription = socket.listen(
         (dynamic message) => _receive(message, generation, socket),
         onError: (Object error) =>
-            _lost(generation, socket, 'WebSocket connection failed'),
-        onDone: () => _lost(generation, socket, 'ESP32 disconnected'),
+            _lost(generation, socket, 'WebSocket connection failed: $error'),
+        onDone: () => _lost(
+          generation,
+          socket,
+          'ESP32 disconnected (code: ${socket.closeCode ?? 'unavailable'})',
+        ),
         cancelOnError: true,
       );
     } catch (_) {

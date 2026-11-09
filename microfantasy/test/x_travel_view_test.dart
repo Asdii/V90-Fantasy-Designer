@@ -78,6 +78,20 @@ void main() {
       ),
     );
     final before = tester.getCenter(marker);
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('x-travel-select-positive')),
+        matching: find.text('Tope −'),
+      ),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('x-travel-select-negative')),
+        matching: find.text('Tope +'),
+      ),
+      findsOneWidget,
+    );
     await tester.tap(find.byKey(const ValueKey('x-travel-select-negative')));
     await tester.pump();
     expect(selections, [XTravelSelection.negative]);
@@ -86,6 +100,7 @@ void main() {
     expect(selections, [XTravelSelection.negative]);
     expect(tester.getCenter(marker), before);
     expect(find.text('X actual: +10.000 mm'), findsOneWidget);
+    expect(tester.getCenter(marker).dx, lessThan(x(tester, 'x-travel-zero')));
     expect(find.byType(Slider), findsNothing);
     for (final side in XTravelSelection.values) {
       expect(

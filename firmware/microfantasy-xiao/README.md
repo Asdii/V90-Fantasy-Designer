@@ -376,7 +376,26 @@ de telemetría y reconexión WebSocket. No sustituyen la prueba eléctrica:
 La velocidad máxima real y la pérdida de pulsos bajo carga deben medirse con
 hardware. Esta implementación por ISR no promete los 650 mm/s máximos del chip.
 
-## Fuentes
+## Diagnosticar una desconexión de la app
+
+`Connection reset by peer` indica que se cerró la conexión TCP desde el otro
+extremo; no demuestra por sí solo una caída de Wi-Fi. Serial registra por separado
+`App WebSocket connected/disconnected` y si el ESP32 sigue asociado al router,
+su IP y RSSI. Una caída de radio mantiene su mensaje `Wi-Fi disconnect` con motivo.
+En modo AP, el estado indica `setup AP` y RSSI de estación no es aplicable.
+
+El heartbeat WebSocket usa 10 s entre pings, 5 s de espera por pong y 3 fallos
+antes de cerrar un cliente. La telemetría sigue a unos 29 Hz y el contador/cero
+se conservan durante una desconexión. La app conserva la conexión al desplegar
+notificaciones o abrir diálogos; tras volver de un segundo plano prolongado,
+redescubre la placa y utiliza la lectura actual, no la última guardada en el móvil.
+
+Prueba en hardware: abre/cierra las notificaciones varias veces, bloquea y
+desbloquea el teléfono, cambia temporalmente de red y mueve X durante la
+desconexión. La recuperación no debe generar un aviso de reinicio ni perder el
+cero; un reinicio real del ESP32 sí requiere recuperar la referencia.
+
+## Fuentes técnicas
 
 - [AS5311 datasheet rev. 1.13](https://look.ams-osram.com/m/27ea8328172c5288/original/AS5311-DS000200.pdf)
 - [XIAO ESP32-C3](https://wiki.seeedstudio.com/XIAO_ESP32C3_Getting_Started/)

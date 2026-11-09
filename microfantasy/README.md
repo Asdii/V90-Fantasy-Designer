@@ -78,12 +78,16 @@ compensación de excentricidad de **Calibración R**.
 
 1. En el primer montaje, encuentra el centro con tu herramienta física y toca
    **Guardar centro (0)**. El ESP32 confirma esa posición como 0.000 mm.
-2. Mueve manualmente la mesa al tope negativo y pulsa **Guardar tope −**.
-3. Mueve la mesa al tope positivo y pulsa **Guardar tope +**. No es necesario que ambos lados
+2. Mueve manualmente la mesa al extremo derecho del visor y pulsa **Guardar tope +**.
+3. Mueve la mesa al extremo izquierdo y pulsa **Guardar tope −**. No es necesario que ambos lados
    midan lo mismo. El visor representa sus distancias reales y la posición actual.
 4. Después de apagar/reiniciar el ESP32, lleva la mesa a cualquiera de los topes
    guardados y confirma **Estoy en el tope −** o **Estoy en el tope +**. El ESP32 asigna esa coordenada
    a su contador actual; vuelve manualmente a 0.000 mm para recuperar el centro.
+
+Los rótulos de los topes identifican los extremos físicos. Se han intercambiado
+sin invertir las coordenadas guardadas: X positiva sigue a la izquierda de la
+barra, X negativa a la derecha. No es necesario rehacer una calibración existente.
 
 La calibración se guarda en el teléfono por identidad de máquina. La simulación
 usa una identidad separada. No se escriben posiciones continuamente en la flash
@@ -96,6 +100,11 @@ durante la búsqueda y una breve animación al conectar. No es un botón: la bú
 y reconexión son automáticas (mDNS, UDP y direcciones conocidas). Las acciones
 manuales de búsqueda siguen en Configuración; simulación está en Opciones avanzadas.
 Las animaciones respetan la preferencia del sistema de reducir movimiento.
+
+Abrir las notificaciones o un diálogo del sistema no desconecta la máquina.
+Una pausa de menos de 3 s conserva la conexión; al volver de segundo plano
+prolongado, la app busca de nuevo el ESP32 y recibe su posición actual.
+Las lecturas caducadas nunca se usan para confirmar el centro o un tope.
 
 Cada arranque del ESP32 deja un aviso pendiente hasta que el teléfono lo guarda
 y confirma su recepción con `ack_boot`. La app muestra **La máquina se encendió o

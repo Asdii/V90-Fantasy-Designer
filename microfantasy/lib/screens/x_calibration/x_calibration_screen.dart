@@ -218,7 +218,7 @@ class _XCalibrationScreenState extends State<XCalibrationScreen> {
                   const SizedBox(height: 12),
                   _button(
                     key: 'x-reference-negative',
-                    label: 'Estoy en el tope −',
+                    label: 'Estoy en el tope +',
                     onPressed: canCapture ? () => _restore(false) : null,
                   ),
                 ],
@@ -226,7 +226,7 @@ class _XCalibrationScreenState extends State<XCalibrationScreen> {
                   const SizedBox(height: 8),
                   _button(
                     key: 'x-reference-positive',
-                    label: 'Estoy en el tope +',
+                    label: 'Estoy en el tope −',
                     onPressed: canCapture ? () => _restore(true) : null,
                   ),
                 ],
@@ -319,7 +319,9 @@ class _XCalibrationScreenState extends State<XCalibrationScreen> {
 
     final positive = selection == XTravelSelection.positive;
     final value = positive ? axis?.positiveMm : axis?.negativeMm;
-    final sign = positive ? '+' : '−';
+    // Stop labels describe the physical ends, not the sign of stored sensor X.
+    // Keep the measured coordinates and ruler orientation unchanged.
+    final sign = positive ? '−' : '+';
     final ordered = !positive || axis?.negativeMm != null || value != null;
     return _panel(
       context,
@@ -344,7 +346,7 @@ class _XCalibrationScreenState extends State<XCalibrationScreen> {
           ),
         ] else if (!ordered) ...[
           const SizedBox(height: 8),
-          const Text('Guarda primero el tope − para seguir la guía.'),
+          const Text('Guarda primero el tope + para seguir la guía.'),
         ],
         const SizedBox(height: 12),
         _button(

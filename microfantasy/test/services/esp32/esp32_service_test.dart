@@ -258,4 +258,59 @@ void main() {
     await closed.timeout(const Duration(seconds: 3));
     expect(service.currentStatus.state, Esp32ConnectionState.disconnected);
   });
+
+  test(
+    'brief radio stall survives; closed peer reconnects to live X without zero',
+    () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      final sockets = <WebSocket>[];
+      final commands = <Object?>[];
+      final service = WebSocketEsp32Service(
+        reconnectDelay: const Duration(milliseconds: 30),
+        maxReconnectDelay: const Duration(milliseconds: 60),
+      );
+      server.listen((request) async {
+        final socket = await WebSocketTransformer.upgrade(request);
+        sockets.add(socket);
+        socket.listen(commands.add);
+        socket.add(
+          jsonEncode({
+            'type': 'position',
+            'x_mm': sockets.length == 1 ? 11.887 : 14.625,
+          }),
+        );
+      });
+      addTearDown(() async {
+        await service.dispose();
+        for (final socket in sockets) {
+          await socket.close();
+        }
+        await server.close(force: true);
+      });
+      final first = service.positionStream.first;
+      await service.connect(Uri.parse('ws://127.0.0.1:${server.port}/ws'));
+      expect((await first).xMm, 11.887);
+      // Longer than the former app ping/pong deadline. Valid telemetry resumes
+      // on the same socket; it must not be replaced or zeroed during this pause.
+      await Future<void>.delayed(const Duration(milliseconds: 3100));
+      final next = service.positionStream.first;
+      sockets.single.add('{"type":"position","x_mm":12.125}');
+      expect((await next.timeout(const Duration(seconds: 2))).xMm, 12.125);
+      expect(sockets, hasLength(1));
+
+      final lost = service.statusStream.firstWhere(
+        (status) => status.state == Esp32ConnectionState.reconnecting,
+      );
+      final recovered = service.positionStream.first;
+      unawaited(sockets.single.close(WebSocketStatus.goingAway));
+      expect(
+        (await lost.timeout(const Duration(seconds: 2))).message,
+        contains('1001'),
+      );
+      expect(service.currentPosition, isNull);
+      expect((await recovered.timeout(const Duration(seconds: 3))).xMm, 14.625);
+      expect(sockets, hasLength(2));
+      expect(commands, isEmpty); // Never zero_x or restore a phone-cached X.
+    },
+  );
 }

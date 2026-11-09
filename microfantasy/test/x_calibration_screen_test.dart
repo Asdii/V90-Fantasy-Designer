@@ -52,12 +52,14 @@ void main() {
       expect(c.axis!.isComplete, isFalse);
       expect(find.text('X actual: 0.000 mm'), findsOneWidget);
       expect(enabled(tester, 'x-capture-negative'), isTrue);
+      expect(find.text('Guardar tope +'), findsOneWidget);
       c.reading = -25;
       c.publish();
       await tester.pump();
       await tap(tester, 'x-capture-negative');
       expect(c.axis!.negativeMm, -25);
       expect(enabled(tester, 'x-capture-positive'), isTrue);
+      expect(find.text('Guardar tope −'), findsOneWidget);
       c.reading = 75;
       c.publish();
       await tester.pump();
@@ -83,6 +85,15 @@ void main() {
         await tap(tester, 'x-travel-select-negative');
         expect(c.references, isEmpty);
         expect(enabled(tester, 'x-capture-negative'), isFalse);
+        expect(
+          find.descendant(
+            of: keyed(
+              positive ? 'x-reference-positive' : 'x-reference-negative',
+            ),
+            matching: find.text('Estoy en el tope ${positive ? '−' : '+'}'),
+          ),
+          findsOneWidget,
+        );
         await tap(
           tester,
           positive ? 'x-reference-positive' : 'x-reference-negative',

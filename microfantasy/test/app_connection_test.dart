@@ -71,6 +71,10 @@ void main() {
       addTearDown(controller.dispose);
       await controller.initialize();
       await Future<void>.delayed(Duration.zero);
+      await Future.wait([
+        controller.foreground(true),
+        controller.foreground(true),
+      ]);
       controller.nextStep();
       controller.saveCalibrationPoint();
       await controller.flush();
@@ -96,6 +100,14 @@ void main() {
       expect(controller.actualX, 12);
       expect(controller.stepIndex, 1);
       expect(controller.hasCalibrationReference, isTrue);
+      // A rapid pause/resume queued in the same event turn cannot tear down
+      // a healthy socket after the phone is already visible again.
+      await Future.wait([
+        controller.foreground(false),
+        controller.foreground(true),
+      ]);
+      expect(configurations, hasLength(3));
+      expect(controller.actualX, 12);
     },
   );
 }

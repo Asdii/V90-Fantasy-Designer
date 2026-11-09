@@ -11,7 +11,7 @@ class WebSocketEsp32Service
     String? deviceId,
     this.connectTimeout = const Duration(seconds: 5),
     this.telemetryTimeout = const Duration(seconds: 10),
-    this.pingInterval = const Duration(seconds: 5),
+    this.pingInterval = const Duration(seconds: 10),
     this.reconnectDelay = const Duration(seconds: 1),
     this.maxReconnectDelay = const Duration(seconds: 5),
   });

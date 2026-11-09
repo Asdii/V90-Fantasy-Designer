@@ -201,7 +201,7 @@ class XTravelView extends StatelessWidget {
                   child: _reference(
                     context,
                     XTravelSelection.positive,
-                    'Tope +',
+                    'Tope −',
                     positive == null ? 'Sin guardar' : _length(positive),
                   ),
                 ),
@@ -223,7 +223,7 @@ class XTravelView extends StatelessWidget {
                   child: _reference(
                     context,
                     XTravelSelection.negative,
-                    'Tope −',
+                    'Tope +',
                     negative == null ? 'Sin guardar' : _length(negative),
                   ),
                 ),

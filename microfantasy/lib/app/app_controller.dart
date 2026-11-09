@@ -283,8 +283,11 @@ class AppController extends ChangeNotifier {
                 resolver: Esp32Discovery(),
                 deviceId: settings.machineId,
                 connectTimeout: settings.timeout,
-                telemetryTimeout: settings.timeout,
-                pingInterval: const Duration(seconds: 2),
+                // Transport recovery tolerates short phone/radio stalls. The
+                // sensorX freshness check still hides expired measurements.
+                telemetryTimeout: settings.timeout < const Duration(seconds: 10)
+                    ? const Duration(seconds: 10)
+                    : settings.timeout,
               );
     _esp = esp;
     _positionSub = esp.positionStream.listen((p) {
@@ -661,9 +664,12 @@ class AppController extends ChangeNotifier {
   }
 
   Future<void> foreground(bool value) {
+    // Repeated resumed/focus events must not replace an active connection or
+    // interrupt discovery just because its first position has not arrived yet.
+    if (_foreground == value) return _receiverLifecycle;
     _foreground = value;
     final request = _receiverLifecycle.then((_) async {
-      if (_disposed) return;
+      if (_disposed || value != _foreground) return;
       if (!value && !settings.simulation) await _esp?.disconnect();
       if (value && _foreground && !settings.simulation && !machineConnected) {
         await _connect();
@@ -779,7 +785,7 @@ class AppController extends ChangeNotifier {
     _xAxes[axis.deviceId] = next;
     xCalibrationMessage = next.isComplete
         ? 'Recorrido guardado. El centro físico está listo.'
-        : 'Tope ${positive ? '+' : '−'} guardado. Registra el otro extremo.';
+        : 'Tope ${positive ? '−' : '+'} guardado. Registra el otro extremo.';
   });
 
   Future<void> referenceXAtStop({required bool positive}) => _xAction(() async {

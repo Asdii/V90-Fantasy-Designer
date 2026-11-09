@@ -342,10 +342,21 @@ void MachineNetwork::begin(Configuration& configuration) {
     ws.onEvent([](uint8_t client, WStype_t type, uint8_t* data, size_t length) {
         if (type == WStype_CONNECTED) {
             if (String(reinterpret_cast<char*>(data)) != "/ws") { ws.disconnect(client); return; }
+            Serial.printf("App WebSocket connected: client %u | peer %s\n",
+                client, ws.remoteIP(client).toString().c_str());
             publish(client, capture());
+        } else if (type == WStype_DISCONNECTED) {
+            // A TCP peer closure is not necessarily a router/Wi-Fi failure.
+            // Report the radio separately without altering the encoder or zero.
+            Serial.printf("App WebSocket disconnected: client %u | Wi-Fi %s | IP %s | RSSI %d dBm\n",
+                client, WiFi.status() == WL_CONNECTED ? "connected" : (ap ? "setup AP" : "offline"),
+                (WiFi.status() == WL_CONNECTED ? WiFi.localIP() : WiFi.softAPIP()).toString().c_str(),
+                WiFi.RSSI());
         } else if (type == WStype_TEXT) command(client, data, length);
     });
-    ws.enableHeartbeat(3000, 1500, 2);
+    // Allow brief phone scheduling / roaming stalls, while still evicting dead
+    // clients. Telemetry stays at ~29 Hz; this does not slow measurements.
+    ws.enableHeartbeat(10000, 5000, 3);
 }
 
 void MachineNetwork::reopenSetup() {

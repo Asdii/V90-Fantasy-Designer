@@ -41,6 +41,7 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
   int _tab = 0;
   int _lastNotice = 0;
   AppearanceTheme? _appearance;
+  Timer? _backgroundTimer;
   @override
   void initState() {
     super.initState();
@@ -81,7 +82,29 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    unawaited(widget.controller.foreground(state == AppLifecycleState.resumed));
+    // A notification shade, permission dialog or focus change can make the app
+    // inactive while it is still visible. Keep the measurement socket alive.
+    // Brief background transitions also keep their connection; a real pause
+    // releases networking after a grace period, then rediscovers on return.
+    switch (state) {
+      case AppLifecycleState.resumed:
+        _backgroundTimer?.cancel();
+        _backgroundTimer = null;
+        unawaited(widget.controller.foreground(true));
+      case AppLifecycleState.inactive:
+        _backgroundTimer?.cancel();
+        _backgroundTimer = null;
+      case AppLifecycleState.hidden:
+      case AppLifecycleState.paused:
+        _backgroundTimer ??= Timer(const Duration(seconds: 3), () {
+          _backgroundTimer = null;
+          if (mounted) unawaited(widget.controller.foreground(false));
+        });
+      case AppLifecycleState.detached:
+        _backgroundTimer?.cancel();
+        _backgroundTimer = null;
+        unawaited(widget.controller.foreground(false));
+    }
     if (state != AppLifecycleState.resumed) {
       unawaited(widget.controller.flush());
       unawaited(widget.controller.updates.flush());
@@ -92,6 +115,7 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
 
   @override
   void dispose() {
+    _backgroundTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     widget.controller.removeListener(_onChange);
     widget.controller.dispose();

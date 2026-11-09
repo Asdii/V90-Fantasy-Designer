@@ -16,11 +16,15 @@ class AxisCalibration {
     }
     if (negativeMm != null &&
         (!negativeMm!.isFinite || negativeMm! >= 0 || negativeMm! < -10000)) {
-      throw const FormatException('El tope negativo debe quedar bajo 0 mm.');
+      throw const FormatException(
+        'La lectura de este extremo debe quedar bajo 0 mm.',
+      );
     }
     if (positiveMm != null &&
         (!positiveMm!.isFinite || positiveMm! <= 0 || positiveMm! > 10000)) {
-      throw const FormatException('El tope positivo debe quedar sobre 0 mm.');
+      throw const FormatException(
+        'La lectura de este extremo debe quedar sobre 0 mm.',
+      );
     }
   }
 

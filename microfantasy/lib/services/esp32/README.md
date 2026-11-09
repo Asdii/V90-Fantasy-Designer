@@ -73,6 +73,24 @@ invalidate their cached readings on a non-connected status and require a fresh
 position before displaying a centered indication.
 Native sockets reconnect with capped backoff, connection timeout, ping/pong, and a
 valid-telemetry timeout. Stale connection attempts cannot revive a stopped service.
+The app keeps its socket during `inactive` (notification shade / system dialogs)
+and pauses shorter than 3 seconds. A longer hidden/paused state closes networking;
+returning to the app rediscovers the same machine and waits for its current X.
+Repeated resume notifications do not restart an active or connecting service.
+Android/iOS may still suspend networking in the background; this is not a
+background-service guarantee. No lifecycle transition changes the encoder zero.
+
+Client ping interval **and pong deadline** are 10 s. The firmware pings every
+10 s, allowing 5 s per pong and 3 missed responses before closing a dead client.
+App transport recovery waits at least 10 s without valid telemetry, while UI
+position freshness keeps the configured timeout (5 s by default): a stale
+position cannot be used to confirm a stop or display a green target.
+An actual socket closure still triggers immediate retry with fresh discovery.
+Advanced diagnostics include the WebSocket close code or connection error.
+
+References: [Flutter lifecycle states](https://api.flutter.dev/flutter/dart-ui/AppLifecycleState.html),
+[Dart WebSocket ping/pong deadline](https://api.dart.dev/dart-io/WebSocket/pingInterval.html).
+
 Legacy `{ "type": "zero_x" }` requires `allowZeroX: true` and an explicit
 `zeroX()` call. Physical table referencing uses the acknowledged command below.
 Neither command moves the axis. No movement, cutting, or job execution API exists.
