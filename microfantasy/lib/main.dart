@@ -12,7 +12,8 @@ import 'screens/settings/settings_screen.dart';
 import 'services/fantasy_designer/local_receiver_service.dart';
 import 'services/updates/github_update_service.dart';
 import 'widgets/app_updates.dart';
-import 'widgets/machine_connection_button.dart';
+import 'widgets/machine_connection_indicator.dart';
+import 'widgets/machine_boot_banner.dart';
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
@@ -57,7 +58,7 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
       _lastNotice = c.noticeId;
       final text = c.notice!;
       // X capture feedback belongs next to its controls, never over the ruler.
-      if (_tab == 2) return;
+      if (_tab == 1 || _tab == 2) return;
       // The incoming-job card already announces the design and offers actions.
       // Do not also cover the cutting controls with a duplicate toast.
       if (c.pendingJob != null && text.startsWith('Nuevo patrón recibido')) {
@@ -74,7 +75,7 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
   }
 
   void _selectTab(int tab) {
-    if (tab == 2) _messenger.currentState?.hideCurrentSnackBar();
+    if (tab == 1 || tab == 2) _messenger.currentState?.hideCurrentSnackBar();
     setState(() => _tab = tab);
   }
 
@@ -113,16 +114,11 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
         final connection = c.ready
             ? ConstrainedBox(
                 constraints: const BoxConstraints(maxWidth: 150),
-                child: MachineConnectionButton(
+                child: MachineConnectionIndicator(
                   connected: c.machineConnected,
-                  connecting: c.machineConnecting,
-                  enabled: !c.xCalibrationBusy,
                   simulation: c.settings.simulation,
                   connectionLabel: c.connectionLabel,
                   machineAddress: c.machineAddress,
-                  onReconnect: c.reconnectMachine,
-                  onUseRealMachine: () =>
-                      c.updateSettings(c.settings.copyWith(simulation: false)),
                 ),
               )
             : const SizedBox(width: 48, height: 48);
@@ -193,6 +189,15 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                       ),
                     ],
                     if (c.ready) AppUpdateBanner(controller: c.updates),
+                    if (c.ready && c.pendingBootNotice != null)
+                      MachineBootBanner(
+                        hasCalibration: c.xCalibration != null,
+                        onCalibrate: () {
+                          _selectTab(1);
+                          unawaited(c.dismissBootNotice());
+                        },
+                        onDismiss: () => unawaited(c.dismissBootNotice()),
+                      ),
                     if (c.ready && c.pendingJob != null)
                       Container(
                         margin: const EdgeInsets.fromLTRB(18, 12, 18, 0),
@@ -242,8 +247,8 @@ class _MicroFantasyAppState extends State<MicroFantasyApp>
                           ? const Center(child: CircularProgressIndicator())
                           : switch (_tab) {
                               0 => CutScreen(controller: c),
-                              1 => CalibrationScreen(controller: c),
-                              2 => XCalibrationScreen(controller: c),
+                              1 => XCalibrationScreen(controller: c),
+                              2 => CalibrationScreen(controller: c),
                               _ => SettingsScreen(controller: c),
                             },
                     ),
@@ -266,8 +271,8 @@ class _AppTabs extends StatelessWidget {
 
   static const _labels = [
     'Corte',
-    'Calibración R',
     'Calibración X',
+    'Calibración R',
     'Configuración',
   ];
 
@@ -307,7 +312,7 @@ class _AppTabs extends StatelessWidget {
               if (fits(_labels[index])) return _labels[index];
               if (index == 3) return 'Configu-\nración';
               if (index == 1 || index == 2) {
-                final axis = index == 1 ? 'R' : 'X';
+                final axis = index == 1 ? 'X' : 'R';
                 return fits('Calibración')
                     ? 'Calibración\n$axis'
                     : 'Calibra-\nción $axis';

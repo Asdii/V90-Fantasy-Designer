@@ -15,6 +15,7 @@ class XPositionGuide extends StatefulWidget {
     required this.smoothing,
     required this.centimeters,
     this.unavailableLabel = 'Sin conexión',
+    this.reservePrecisionSpace = true,
   });
 
   final double? actualMm;
@@ -23,6 +24,9 @@ class XPositionGuide extends StatefulWidget {
   final String smoothing;
   final bool centimeters;
   final String unavailableLabel;
+  // A pending boot notice can use the empty lens space before X is referenced.
+  // The ruler itself keeps its original size, range and readings.
+  final bool reservePrecisionSpace;
 
   @override
   State<XPositionGuide> createState() => _XPositionGuideState();
@@ -204,94 +208,97 @@ class _XPositionGuideState extends State<XPositionGuide>
                       // the detail lens appears. The funnel points to its exact
                       // represented interval on the main ruler.
                       SizedBox(
-                        height: 180,
+                        height: widget.reservePrecisionSpace ? 180 : 88,
                         child: Stack(
                           children: [
-                            Positioned.fill(
-                              child: IgnorePointer(
-                                child: AnimatedOpacity(
-                                  opacity: _showPrecision ? 1 : 0,
-                                  duration: const Duration(milliseconds: 280),
-                                  curve: Curves.easeInOut,
-                                  child: CustomPaint(
-                                    key: const ValueKey('x-zoom-connector'),
-                                    painter: _ZoomConnectorPainter(
-                                      range: range,
-                                      detailRange: _precisionRange,
-                                      colors: colors,
-                                    ),
-                                    child: Align(
-                                      alignment: Alignment.topCenter,
-                                      child: AnimatedSlide(
-                                        offset: Offset(
-                                          0,
-                                          _showPrecision ? 0 : .08,
-                                        ),
-                                        duration: const Duration(
-                                          milliseconds: 280,
-                                        ),
-                                        curve: Curves.easeOutCubic,
-                                        child: Container(
-                                          height: 72,
-                                          margin: const EdgeInsets.fromLTRB(
-                                            16,
-                                            8,
-                                            16,
+                            if (widget.reservePrecisionSpace)
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: AnimatedOpacity(
+                                    opacity: _showPrecision ? 1 : 0,
+                                    duration: const Duration(milliseconds: 280),
+                                    curve: Curves.easeInOut,
+                                    child: CustomPaint(
+                                      key: const ValueKey('x-zoom-connector'),
+                                      painter: _ZoomConnectorPainter(
+                                        range: range,
+                                        detailRange: _precisionRange,
+                                        colors: colors,
+                                      ),
+                                      child: Align(
+                                        alignment: Alignment.topCenter,
+                                        child: AnimatedSlide(
+                                          offset: Offset(
                                             0,
+                                            _showPrecision ? 0 : .08,
                                           ),
-                                          decoration: BoxDecoration(
-                                            color: colors.surfaceContainerLow,
-                                            borderRadius: BorderRadius.circular(
-                                              12,
-                                            ),
-                                            border: Border.all(
-                                              color: colors.outlineVariant,
-                                            ),
+                                          duration: const Duration(
+                                            milliseconds: 280,
                                           ),
-                                          child: Column(
-                                            children: [
-                                              const SizedBox(height: 5),
-                                              Text(
-                                                'Detalle · ±${_length(_precisionRange, widget.centimeters, compact: true)}',
-                                                maxLines: 1,
-                                                overflow: TextOverflow.ellipsis,
-                                                style: theme
-                                                    .textTheme
-                                                    .labelSmall
-                                                    ?.copyWith(
-                                                      color: colors
-                                                          .onSurfaceVariant,
-                                                    ),
+                                          curve: Curves.easeOutCubic,
+                                          child: Container(
+                                            height: 72,
+                                            margin: const EdgeInsets.fromLTRB(
+                                              16,
+                                              8,
+                                              16,
+                                              0,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: colors.surfaceContainerLow,
+                                              borderRadius:
+                                                  BorderRadius.circular(12),
+                                              border: Border.all(
+                                                color: colors.outlineVariant,
                                               ),
-                                              Expanded(
-                                                child: CustomPaint(
-                                                  key: const ValueKey(
-                                                    'x-precision-bar',
-                                                  ),
-                                                  size: const Size(
-                                                    double.infinity,
-                                                    double.infinity,
-                                                  ),
-                                                  painter: _PositionPainter(
-                                                    actual: ready
-                                                        ? _visualActual
-                                                        : null,
-                                                    target: validTarget
-                                                        ? widget.targetMm
-                                                        : 0,
-                                                    tolerance: validTolerance
-                                                        ? widget.toleranceMm
-                                                        : 0,
-                                                    range: _precisionRange,
-                                                    centimeters:
-                                                        widget.centimeters,
-                                                    colors: colors,
-                                                    successColor: successColor,
-                                                    precision: true,
+                                            ),
+                                            child: Column(
+                                              children: [
+                                                const SizedBox(height: 5),
+                                                Text(
+                                                  'Detalle · ±${_length(_precisionRange, widget.centimeters, compact: true)}',
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: theme
+                                                      .textTheme
+                                                      .labelSmall
+                                                      ?.copyWith(
+                                                        color: colors
+                                                            .onSurfaceVariant,
+                                                      ),
+                                                ),
+                                                Expanded(
+                                                  child: CustomPaint(
+                                                    key: const ValueKey(
+                                                      'x-precision-bar',
+                                                    ),
+                                                    size: const Size(
+                                                      double.infinity,
+                                                      double.infinity,
+                                                    ),
+                                                    painter: _PositionPainter(
+                                                      actual: ready
+                                                          ? _visualActual
+                                                          : null,
+                                                      target: validTarget
+                                                          ? widget.targetMm
+                                                          : 0,
+                                                      tolerance: validTolerance
+                                                          ? widget.toleranceMm
+                                                          : 0,
+                                                      range: _precisionRange,
+                                                      centimeters:
+                                                          widget.centimeters,
+                                                      colors: colors,
+                                                      successColor:
+                                                          successColor,
+                                                      precision: true,
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                            ],
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
@@ -299,11 +306,10 @@ class _XPositionGuideState extends State<XPositionGuide>
                                   ),
                                 ),
                               ),
-                            ),
                             Positioned(
                               left: 0,
                               right: 0,
-                              top: 92,
+                              top: widget.reservePrecisionSpace ? 92 : 0,
                               height: 88,
                               child: CustomPaint(
                                 key: const ValueKey('x-position-bar'),
@@ -530,7 +536,8 @@ class _PositionPainter extends CustomPainter {
           ..color = colors.outlineVariant
           ..strokeWidth = 1,
       );
-      final double delta = fraction * range;
+      // Physical table convention: +X is left, -X is right in both rulers.
+      final double delta = -fraction * range;
       final TextPainter label = TextPainter(
         text: TextSpan(
           text: tickLabel(delta),
@@ -556,7 +563,7 @@ class _PositionPainter extends CustomPainter {
 
     final double? live = actual;
     if (live == null) return;
-    final double relative = (live - target) / range;
+    final double relative = (target - live) / range;
     final double x = center + relative.clamp(-1.0, 1.0).toDouble() * halfWidth;
     final Paint marker = Paint()
       ..color = Colors.black

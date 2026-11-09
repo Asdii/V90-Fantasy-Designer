@@ -7,6 +7,7 @@ import '../models/models.dart';
 import '../models/job_progress.dart';
 import '../models/x_axis_calibration.dart';
 import '../repositories/x_axis_repository.dart';
+import '../repositories/machine_boot_repository.dart';
 import '../repositories/key_value_store.dart';
 import '../repositories/job_repository.dart';
 import '../repositories/settings_repository.dart';
@@ -32,7 +33,8 @@ class AppController extends ChangeNotifier {
        jobs = JobRepository(store),
        preferences = SettingsRepository(store),
        calibrations = CalibrationRepository(store),
-       xAxes = XAxisRepository(store);
+       xAxes = XAxisRepository(store),
+       machineBoots = MachineBootRepository(store);
   final KeyValueStore store;
   final FantasyDesignerService designer;
   final Esp32Service Function(AppSettings settings)? hardwareFactory;
@@ -42,6 +44,12 @@ class AppController extends ChangeNotifier {
   final SettingsRepository preferences;
   final CalibrationRepository calibrations;
   final XAxisRepository xAxes;
+  final MachineBootRepository machineBoots;
+  final Map<String, MachineBootRecord> _machineBoots = {};
+  Future<void> _bootSync = Future<void>.value();
+  bool _handlingBoot = false;
+  (String, String)? _lastBootToken;
+  DateTime? _lastBootAttempt;
   final Map<String, AxisCalibration> _xAxes = {};
   bool xCalibrationBusy = false;
   String? xCalibrationMessage;
@@ -112,6 +120,12 @@ class AppController extends ChangeNotifier {
       ? 'microfantasy-simulation'
       : _esp?.currentStatus.deviceId ?? settings.machineId;
   AxisCalibration? get xCalibration => _xAxes[_axisDeviceId];
+  MachineBootRecord? get pendingBootNotice {
+    if (settings.simulation) return null;
+    final record = _machineBoots[_axisDeviceId];
+    return record?.unread == true ? record : null;
+  }
+
   bool get machineConnected => sensorX != null;
   bool get machineConnecting => _connecting > 0;
   bool get xReferenceSupported =>
@@ -161,6 +175,9 @@ class AppController extends ChangeNotifier {
   Future<void> initialize() async {
     try {
       settings = await preferences.load();
+      for (final record in await machineBoots.load()) {
+        _machineBoots[record.deviceId] = record;
+      }
       for (final axis in await xAxes.load()) {
         _xAxes[axis.deviceId] = axis;
       }
@@ -286,6 +303,7 @@ class AppController extends ChangeNotifier {
     });
     _statusSub = esp.statusStream.listen((s) {
       if (!s.isConnected) _lastPosition = null;
+      _receiveBootNotice(esp, s);
       final endpoint = s.endpoint;
       if (!settings.simulation &&
           s.isConnected &&
@@ -405,7 +423,85 @@ class AppController extends ChangeNotifier {
     });
   }
 
-  Future<void> flush() => _writes;
+  Future<void> flush() async {
+    await _writes;
+    await _bootSync;
+  }
+
+  void _receiveBootNotice(Esp32Service esp, Esp32Status status) {
+    final deviceId = status.deviceId, bootId = status.bootId;
+    if (settings.simulation ||
+        !status.isConnected ||
+        deviceId == null ||
+        bootId == null ||
+        _disposed ||
+        _handlingBoot) {
+      return;
+    }
+    final known = _machineBoots[deviceId];
+    final needsReceipt = status.supportsBootNotice && status.bootNoticePending;
+    if (known?.bootId == bootId && !needsReceipt) return;
+    final token = (deviceId, bootId);
+    final now = DateTime.now();
+    if (_lastBootToken == token &&
+        _lastBootAttempt != null &&
+        now.difference(_lastBootAttempt!) < const Duration(seconds: 2)) {
+      return;
+    }
+    _lastBootToken = token;
+    _lastBootAttempt = now;
+    _handlingBoot = true;
+    _bootSync = _bootSync
+        .then((_) async {
+          final current = _machineBoots[deviceId];
+          final record = current?.bootId == bootId
+              ? current!
+              : MachineBootRecord(deviceId: deviceId, bootId: bootId);
+          await machineBoots.save(record);
+          _machineBoots[deviceId] = record;
+          _refresh();
+          // An app receipt means "saved", not "X has been calibrated". Never
+          // restore an old sensor reading or acknowledge a different power-on.
+          if (_foreground &&
+              !_disposed &&
+              identical(esp, _esp) &&
+              esp.currentStatus.isConnected &&
+              esp.currentStatus.bootId == bootId &&
+              needsReceipt &&
+              esp is BootNoticeEsp32Service) {
+            await (esp as BootNoticeEsp32Service).acknowledgeBoot(bootId);
+          }
+        })
+        .catchError((Object error) {
+          debugPrint('Boot notice not acknowledged: $error');
+          // The board keeps the pending notice and will retry on its next status.
+        })
+        .whenComplete(() {
+          _handlingBoot = false;
+        });
+  }
+
+  Future<void> dismissBootNotice() {
+    final record = pendingBootNotice;
+    if (record == null) return Future<void>.value();
+    _bootSync = _bootSync
+        .then((_) async {
+          if (_machineBoots[record.deviceId]?.bootId != record.bootId) return;
+          final read = MachineBootRecord(
+            deviceId: record.deviceId,
+            bootId: record.bootId,
+            unread: false,
+          );
+          await machineBoots.save(read);
+          _machineBoots[read.deviceId] = read;
+          _refresh();
+        })
+        .catchError((Object error) {
+          debugPrint('Boot notice could not be dismissed: $error');
+        });
+    return _bootSync;
+  }
+
   Future<void> receiveJob(CuttingJob incoming) async {
     final receipt = _receipts.then(
       (_) => _run(() async {

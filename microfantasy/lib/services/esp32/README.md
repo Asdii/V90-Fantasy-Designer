@@ -118,6 +118,29 @@ The mock supports `simulateRestart()` for testing power loss, whereas
 `disconnect()`/`connect()` preserve the same boot/frame. `setPosition()` supplies
 manual simulated motion; `setXReference()` assigns the confirmed coordinate.
 
+### Power-on notice (capability `ack_boot`)
+
+Status/identity frames carry `boot_notice_pending: true` after every power-on or
+reset. The firmware keeps sending this flag, without a timeout, until it receives:
+
+```json
+{"type":"ack_boot","boot_id":"current-boot"}
+```
+
+Only the matching boot can be acknowledged. Duplicate acknowledgements are safe;
+an old boot ID cannot consume a new notification. The response is an ordinary
+status with `boot_notice_pending: false`. Neither receipt nor dismissal modifies
+X, its reference or encoder counts. The pending flag lives in RAM for that boot;
+a subsequent power-on creates a new boot ID and a new pending flag, not NVS writes.
+
+`BootNoticeEsp32Service` isolates acknowledgement from UI and reference commands.
+`MachineBootRepository` durably stores the boot ID and unread state **before** an
+ACK is sent. If saving fails or the ACK is lost, status frames trigger a throttled
+retry. The persistent in-app banner opens Calibración X. Reopening the app keeps an
+unread banner; reconnecting to the same boot does not revive a dismissed one.
+Legacy firmware with a boot ID still gets local restart detection; reliable board
+retransmission requires the new firmware. Simulation does not show hardware notices.
+
 ### Discovery and recovery
 
 Every connection/reconnection races the last address, `fantasy-machine.local`,

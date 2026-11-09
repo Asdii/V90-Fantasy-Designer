@@ -44,6 +44,22 @@ Future<void> _guide(
 
 void main() {
   group('X guide', () {
+    testWidgets('positive readings move left on both rulers, not only labels', (
+      tester,
+    ) async {
+      for (final delta in [.04, -.04, 0.0]) {
+        await _guide(tester, 12.5 + delta, target: 12.5);
+        await tester.pumpAndSettle();
+        for (final key in [_mainBar, _precisionBar]) {
+          final canvas = _MarkerCanvas();
+          _painter(tester, key).paint(canvas, const Size(300, 88));
+          final marker = canvas.marker!;
+          if (delta > 0) expect(marker.dx, lessThan(150));
+          if (delta < 0) expect(marker.dx, greaterThan(150));
+          if (delta == 0) expect(marker.dx, 150);
+        }
+      }
+    });
     for (final smoothing in ['off', 'light', 'medium']) {
       testWidgets(
         'main ruler stays at ±12.5 mm throughout approach ($smoothing)',
@@ -442,4 +458,15 @@ void main() {
       await tester.pumpWidget(const SizedBox.shrink());
     },
   );
+}
+
+class _MarkerCanvas implements Canvas {
+  Offset? marker;
+  @override
+  void drawLine(Offset start, Offset end, Paint paint) {
+    if (paint.color == Colors.black && paint.strokeWidth == 2.5) marker = start;
+  }
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => null;
 }

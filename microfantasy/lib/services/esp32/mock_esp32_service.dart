@@ -4,7 +4,8 @@ import 'dart:math' as math;
 import 'esp32_service.dart';
 import 'esp32_protocol.dart';
 
-class MockEsp32Service implements Esp32Service, XReferenceEsp32Service {
+class MockEsp32Service
+    implements Esp32Service, XReferenceEsp32Service, BootNoticeEsp32Service {
   MockEsp32Service({
     double initialPositionMm = 0,
     this.telemetryInterval = const Duration(milliseconds: 100),
@@ -33,6 +34,7 @@ class MockEsp32Service implements Esp32Service, XReferenceEsp32Service {
   String _bootId = 'mock-${DateTime.now().microsecondsSinceEpoch}';
   String? _referenceId;
   int _referenceRevision = 0;
+  bool _bootNoticePending = true;
 
   @override
   Stream<Esp32Position> get positionStream => _positions.stream;
@@ -57,6 +59,8 @@ class MockEsp32Service implements Esp32Service, XReferenceEsp32Service {
       referenceId: _referenceId,
       referenceRevision: _referenceRevision,
       supportsXReference: true,
+      supportsBootNotice: true,
+      bootNoticePending: _bootNoticePending,
     );
     _statuses.add(_status);
     _emitPosition(_position!.xMm);
@@ -148,8 +152,19 @@ class MockEsp32Service implements Esp32Service, XReferenceEsp32Service {
     _bootId = 'mock-${DateTime.now().microsecondsSinceEpoch}';
     _referenceId = null;
     _referenceRevision = 0;
+    _bootNoticePending = true;
     _position = Esp32Position(xMm: 0, receivedAt: DateTime.now());
     await connect(endpoint);
+  }
+
+  @override
+  Future<void> acknowledgeBoot(String bootId) async {
+    _checkAlive();
+    if (!_status.isConnected || bootId != _bootId) {
+      throw StateError('Mock boot changed');
+    }
+    _bootNoticePending = false;
+    await connect(_status.endpoint);
   }
 
   @override

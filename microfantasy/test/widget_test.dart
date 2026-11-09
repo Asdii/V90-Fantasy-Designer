@@ -3,7 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:microfantasy/app/app_controller.dart';
 import 'package:microfantasy/main.dart';
 import 'package:microfantasy/screens/cut/cut_screen.dart';
-import 'package:microfantasy/widgets/machine_connection_button.dart';
+import 'package:microfantasy/widgets/machine_connection_indicator.dart';
 import 'package:microfantasy/repositories/key_value_store.dart';
 import 'package:microfantasy/services/fantasy_designer/local_receiver_service.dart';
 
@@ -35,9 +35,8 @@ void main() {
       await tester.pumpWidget(MicroFantasyApp(controller: c));
       await tester.pump(const Duration(milliseconds: 300));
       final bounds = Rect.fromLTWH(0, 24, size.width, size.height - 48);
-      expect(find.byType(MachineConnectionButton), findsOneWidget);
+      expect(find.byType(MachineConnectionIndicator), findsOneWidget);
       for (final finder in [
-        find.byKey(const ValueKey('machine-connection-action')),
         for (var i = 0; i < 4; i++) find.byKey(ValueKey('app-tab-$i')),
       ]) {
         final rect = tester.getRect(finder);
@@ -81,11 +80,11 @@ void main() {
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Paso 2 de 6'), findsOneWidget);
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byKey(const ValueKey('app-tab-1')));
+      await tester.tap(find.byKey(const ValueKey('app-tab-2')));
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Calibración R'), findsAtLeastNWidgets(1));
       expect(tester.takeException(), isNull);
-      await tester.tap(find.byKey(const ValueKey('app-tab-2')));
+      await tester.tap(find.byKey(const ValueKey('app-tab-1')));
       await tester.pump(const Duration(milliseconds: 300));
       expect(find.text('Calibración X'), findsAtLeastNWidgets(1));
       expect(find.byKey(const ValueKey('x-travel-reading')), findsOneWidget);
@@ -134,7 +133,7 @@ void main() {
     });
     await tester.pumpWidget(MicroFantasyApp(controller: c));
     await tester.pump(const Duration(milliseconds: 300));
-    await tester.tap(find.byKey(const ValueKey('app-tab-2')));
+    await tester.tap(find.byKey(const ValueKey('app-tab-1')));
     await tester.pump(const Duration(milliseconds: 300));
     // The short landscape check covers chrome and the scrollable X screen;
     // it does not impose a new minimum-height requirement on the cutting ruler.
@@ -142,7 +141,6 @@ void main() {
     await tester.pumpAndSettle();
     const bounds = Rect.fromLTWH(0, 24, 568, 272);
     for (final finder in [
-      find.byKey(const ValueKey('machine-connection-action')),
       for (var i = 0; i < 4; i++) find.byKey(ValueKey('app-tab-$i')),
     ]) {
       final rect = tester.getRect(finder);

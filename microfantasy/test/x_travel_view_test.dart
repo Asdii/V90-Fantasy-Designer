@@ -45,12 +45,13 @@ void main() {
           positionMm: position,
         ),
       );
-      final left = x(tester, 'x-travel-negative-stop');
-      final right = x(tester, 'x-travel-positive-stop');
+      final left = x(tester, 'x-travel-positive-stop');
+      final right = x(tester, 'x-travel-negative-stop');
+      expect(left, lessThan(right));
       final zero = x(tester, 'x-travel-zero');
       expect(
         (zero - left) / (right - left),
-        closeTo(-negative / (positive - negative), .0001),
+        closeTo(positive / (positive - negative), .0001),
       );
       expect(
         (tester.getCenter(marker).dx - left) / (right - left),

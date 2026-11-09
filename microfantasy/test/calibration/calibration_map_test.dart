@@ -76,6 +76,10 @@ void main() {
         expect(bounds.inflate(0.001).contains(dot.center), isTrue);
       }
       final fullScale = connectors.first.end.dx - connectors.first.start.dx;
+      expect(
+        fullScale,
+        lessThan(0),
+      ); // Positive X moves left; R stays clockwise.
       final relativeOffsets = [1, -.5, .5, -1, 0];
       for (var i = 0; i < connectors.length; i++) {
         final line = connectors[i];
@@ -97,7 +101,7 @@ void main() {
         find.text('Desviación X por ángulo · no es una trayectoria XY'),
         findsOneWidget,
       );
-      expect(find.text('−X ← eje X → +X'), findsOneWidget);
+      expect(find.text('+X ← eje X → −X'), findsOneWidget);
       expect(find.text('Escala X ampliada: ±2.000 mm'), findsOneWidget);
     },
   );

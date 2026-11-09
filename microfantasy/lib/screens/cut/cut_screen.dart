@@ -153,6 +153,7 @@ class CutScreen extends StatelessWidget {
       ],
     );
     final guide = XPositionGuide(
+      reservePrecisionSpace: c.pendingBootNotice == null,
       actualMm: c.actualX,
       targetMm: c.correctedTarget,
       toleranceMm: c.settings.tolerance,

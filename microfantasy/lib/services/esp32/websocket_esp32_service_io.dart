@@ -7,7 +7,8 @@ import 'esp32_protocol.dart';
 import 'esp32_device.dart';
 import 'esp32_service.dart';
 
-class WebSocketEsp32Service implements Esp32Service, XReferenceEsp32Service {
+class WebSocketEsp32Service
+    implements Esp32Service, XReferenceEsp32Service, BootNoticeEsp32Service {
   WebSocketEsp32Service({
     this.allowZeroX = false,
     this.resolver,
@@ -36,6 +37,7 @@ class WebSocketEsp32Service implements Esp32Service, XReferenceEsp32Service {
   String? _bootId, _referenceId;
   int? _referenceRevision;
   bool _supportsXReference = false;
+  bool _supportsBootNotice = false, _bootNoticePending = false;
   _PendingReference? _referenceRequest;
   final Duration connectTimeout;
   final Duration telemetryTimeout;
@@ -104,6 +106,8 @@ class WebSocketEsp32Service implements Esp32Service, XReferenceEsp32Service {
       _referenceId = null;
       _referenceRevision = null;
       _supportsXReference = false;
+      _supportsBootNotice = false;
+      _bootNoticePending = false;
       _candidateId = _deviceId;
       if (resolver != null) {
         final device = await resolver!.resolve(_endpoint!, deviceId: _deviceId);
@@ -260,6 +264,8 @@ class WebSocketEsp32Service implements Esp32Service, XReferenceEsp32Service {
       referenceId: _referenceId,
       referenceRevision: _referenceRevision,
       supportsXReference: _supportsXReference,
+      supportsBootNotice: _supportsBootNotice,
+      bootNoticePending: _bootNoticePending,
     );
     _statuses.add(_status);
   }
@@ -276,13 +282,32 @@ class WebSocketEsp32Service implements Esp32Service, XReferenceEsp32Service {
       if (_bootId != null && _bootId != value.bootId) {
         _failReference('La máquina se reinició. Confirma de nuevo el tope.');
         _position = null;
+        _bootNoticePending = false;
       }
       _bootId = value.bootId;
       _referenceId = value.referenceId;
       _referenceRevision = value.referenceRevision;
     }
     _supportsXReference = value.supportsXReference ?? _supportsXReference;
+    _supportsBootNotice = value.supportsBootNotice ?? _supportsBootNotice;
+    _bootNoticePending = value.bootNoticePending ?? _bootNoticePending;
     return true;
+  }
+
+  @override
+  Future<void> acknowledgeBoot(String bootId) async {
+    if (!validReferenceIdentifier(bootId) ||
+        !_status.isConnected ||
+        !_supportsBootNotice ||
+        _bootId != bootId ||
+        _socket == null) {
+      throw StateError(
+        'Boot notice no longer belongs to the connected machine',
+      );
+    }
+    _socket!.add(jsonEncode({'type': 'ack_boot', 'boot_id': bootId}));
+    // Leave pending true until the firmware reports the receipt. If this frame
+    // is lost, subsequent status frames cause the app to retry safely.
   }
 
   @override

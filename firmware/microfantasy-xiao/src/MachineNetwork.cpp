@@ -4,6 +4,7 @@
 #include "WifiProvisioning.h"
 #include "WifiReconnectPolicy.h"
 #include "XReferenceProtocol.h"
+#include "BootNotice.h"
 #include <WiFi.h>
 #include <WiFiUdp.h>
 #include <WebServer.h>
@@ -22,6 +23,7 @@ Configuration* config;
 String deviceId;
 IPAddress announcedIp;
 XReference::State xReference;
+BootNotice::State bootNotice;
 bool ap = false, connectedBefore = false, mdns = false;
 uint32_t lostAt = 0, closeApAt = 0, lastFrame = 0, lastStatus = 0;
 uint32_t seenDisconnect = 0, lastDiscoveryReply = 0, lastMdnsAttempt = 0;
@@ -48,6 +50,8 @@ void identity(JsonDocument& doc, const Frame& frame) {
     doc["ws_path"] = "/ws";
     XReferenceProtocol::writeState(doc, frame.x);
     XReferenceProtocol::writeCapabilities(doc);
+    doc["capabilities"].as<JsonArray>().add("ack_boot");
+    bootNotice.write(doc);
 }
 
 void discoveryTick(uint32_t now) {
@@ -144,6 +148,12 @@ void command(uint8_t client, uint8_t* payload, size_t length) {
         return;
     }
     const JsonVariantConst type = doc["type"];
+    if (type == "ack_boot") {
+        if (!bootNotice.acknowledge(doc.as<JsonVariantConst>())) {
+            status(client, capture(), "invalid_boot_ack");
+        } else status(client, capture());
+        return;
+    }
     if (type == "set_x_reference") {
         const auto sample = Encoder::read();
         const auto ack = XReferenceProtocol::anchor(xReference, doc.as<JsonVariantConst>(), sample.count);
@@ -243,6 +253,7 @@ void MachineNetwork::begin(Configuration& configuration) {
     }
     bootId[32] = '\0';
     xReference.beginBoot(bootId, config->inverted);
+    bootNotice.begin(bootId);
     deviceId = "microfantasy-" + WiFi.macAddress();
     deviceId.replace(":", ""); deviceId.toLowerCase();
     WifiProvisioning::begin(configuration);

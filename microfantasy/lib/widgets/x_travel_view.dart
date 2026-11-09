@@ -109,7 +109,7 @@ class XTravelView extends StatelessWidget {
                     );
                     double x(double mm) =>
                         inset +
-                        ((mm - min) / (max - min)).clamp(0.0, 1.0) * width;
+                        ((max - mm) / (max - min)).clamp(0.0, 1.0) * width;
                     return Stack(
                       clipBehavior: Clip.none,
                       children: [
@@ -169,8 +169,8 @@ class XTravelView extends StatelessWidget {
                                 Icon(
                                   outside
                                       ? position < 0
-                                            ? Icons.arrow_left
-                                            : Icons.arrow_right
+                                            ? Icons.arrow_right
+                                            : Icons.arrow_left
                                       : Icons.arrow_drop_down,
                                   color: outside
                                       ? colors.error
@@ -200,9 +200,9 @@ class XTravelView extends StatelessWidget {
                 Expanded(
                   child: _reference(
                     context,
-                    XTravelSelection.negative,
-                    'Tope −',
-                    negative == null ? 'Sin guardar' : _length(negative),
+                    XTravelSelection.positive,
+                    'Tope +',
+                    positive == null ? 'Sin guardar' : _length(positive),
                   ),
                 ),
                 const SizedBox(width: 4),
@@ -222,9 +222,9 @@ class XTravelView extends StatelessWidget {
                 Expanded(
                   child: _reference(
                     context,
-                    XTravelSelection.positive,
-                    'Tope +',
-                    positive == null ? 'Sin guardar' : _length(positive),
+                    XTravelSelection.negative,
+                    'Tope −',
+                    negative == null ? 'Sin guardar' : _length(negative),
                   ),
                 ),
               ],

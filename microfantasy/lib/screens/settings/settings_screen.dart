@@ -299,11 +299,14 @@ class SettingsScreen extends StatelessWidget {
             ),
             if (s.simulation) ...[
               Text('X simulado: ${c.length(c.rawX ?? 0)}'),
-              Slider(
-                min: -30,
-                max: 30,
-                value: (c.rawX ?? 0).clamp(-30, 30),
-                onChanged: c.simulateX,
+              Directionality(
+                textDirection: TextDirection.rtl,
+                child: Slider(
+                  min: -30,
+                  max: 30,
+                  value: (c.rawX ?? 0).clamp(-30, 30),
+                  onChanged: c.simulateX,
+                ),
               ),
               Wrap(
                 spacing: 8,

@@ -2,7 +2,7 @@
 
 Guía móvil de corte manual para lapidarios. El usuario gira R, mueve X hasta la zona de tolerancia y realiza el corte manualmente. La app **no controla motores**. Sólo X se mide y compensa; la pantalla de corte muestra R como orientación manual. La profundidad se conserva en el trabajo recibido, pero no se muestra como indicador.
 
-Aplicación Flutter independiente de V90, con proyectos Android, iOS y una vista web de simulación. Cuatro secciones: **Corte · Calibración R · Calibración X · Configuración**. Interfaz clara en español.
+Aplicación Flutter independiente de V90, con proyectos Android, iOS y una vista web de simulación. Cuatro secciones: **Corte · Calibración X · Calibración R · Configuración**. Interfaz clara en español.
 
 ## Ejecutar
 
@@ -91,10 +91,24 @@ del ESP32. Un corte de Wi-Fi conserva el contador y la referencia mientras la
 placa siga alimentada. Tras un reinicio se exige confirmar un tope; no se reutiliza
 la última lectura del teléfono como si fuera una posición física conocida.
 
-El botón de conexión de la esquina superior derecha pulsa suavemente cuando
-falta la máquina. Tocarlo cancela la espera de reconexión e inicia una nueva
-búsqueda verificada por identidad (mDNS, UDP y direcciones conocidas). No modifica
-el cero. En simulación ofrece cambiar explícitamente a la máquina real.
+El indicador de conexión de la esquina superior derecha muestra trazos radiales
+durante la búsqueda y una breve animación al conectar. No es un botón: la búsqueda
+y reconexión son automáticas (mDNS, UDP y direcciones conocidas). Las acciones
+manuales de búsqueda siguen en Configuración; simulación está en Opciones avanzadas.
+Las animaciones respetan la preferencia del sistema de reducir movimiento.
+
+Cada arranque del ESP32 deja un aviso pendiente hasta que el teléfono lo guarda
+y confirma su recepción con `ack_boot`. La app muestra **La máquina se encendió o
+reinició**, con acceso directo a **Calibrar X**. Si estaba cerrada, recibe el aviso
+al reconectar; si ya lo había recibido, conserva el aviso sin leer localmente.
+Una caída de Wi-Fi no crea otro aviso. Cerrar el aviso no calibra el eje ni restaura
+una posición antigua. Es un aviso dentro de la app, no una notificación push del
+sistema mientras la app está cerrada. Se requiere actualizar también el firmware
+para la confirmación persistente durante ese arranque.
+
+Todas las vistas X muestran **positivo a la izquierda y negativo a la derecha**:
+regla principal, lupa, recorrido de la mesa, mapa de desviación R y simulador.
+Esta orientación visual no invierte las mediciones ni las calibraciones guardadas.
 
 Se necesita actualizar **la app y el firmware** para registrar el centro/topes.
 Firmware anterior sigue proporcionando lecturas, pero no admite esta función.
@@ -256,7 +270,7 @@ mensajes de error ni se envían a una dirección de redirección.
 - `lib/services/fantasy_designer/`: interfaz, receptor HTTP nativo y variante web.
 - `lib/services/calibration/`: interpolación y compensación.
 - `lib/repositories/`: trabajos, preferencias, calibraciones y almacenamiento desacoplado.
-- `lib/screens/`: Corte, Calibración R, Calibración X, Configuración.
+- `lib/screens/`: Corte, Calibración X, Calibración R, Configuración.
 - `lib/widgets/`: barra X, plano 2D, Cut Helper de V90 y mapa circular.
 
 `SharedPreferencesAsync` guarda JSON versionado; repositorios serializan operaciones para evitar perder cambios concurrentes. `MemoryStore` permite pruebas sin plugins. El progreso incluye una copia independiente del trabajo abierto, por lo que recibir otro con el mismo ID no modifica el trabajo en curso antes de aceptarlo.
@@ -273,7 +287,7 @@ flutter build apk --debug
 
 Las pruebas cubren interpolación, wrap, compensación, pasos, JSON, persistencia, recepción HTTP real en loopback, reconexión WebSocket, mock y navegación en teléfono pequeño.
 
-Capturas opcionales: `flutter test --update-goldens tool/visual_check_test.dart`. Se escriben en `build/qa/`; las variables `MICROFANTASY_QA_FONT` y `MICROFANTASY_QA_ICONS` aceptan archivos de fuente locales para la verificación visual.
+Capturas opcionales: `flutter test --update-goldens tool/visual_check_test.dart` y `flutter test --update-goldens tool/boot_visual_check_test.dart` (aviso de reinicio, polaridad X y estados del indicador de conexión). Se escriben en `build/qa/`; las variables `MICROFANTASY_QA_FONT` y `MICROFANTASY_QA_ICONS` aceptan archivos de fuente locales para la verificación visual.
 
 El hardware ESP32 y la distribución iOS requieren validación en dispositivos físicos. La app no verifica físicamente R ni profundidad: dependen del ajuste manual.
 

@@ -173,7 +173,7 @@ class _XCalibrationScreenState extends State<XCalibrationScreen> {
             else if (!c.machineConnected)
               _notice(
                 context,
-                'Conecta la máquina con el botón superior para guardar referencias.',
+                'Buscando la máquina. Mantenla encendida para guardar referencias.',
               )
             else if (!c.xReferenceSupported)
               _notice(

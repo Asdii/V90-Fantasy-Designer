@@ -51,6 +51,8 @@ class Esp32Status {
     this.referenceId,
     this.referenceRevision,
     this.supportsXReference = false,
+    this.supportsBootNotice = false,
+    this.bootNoticePending = false,
   });
   final Esp32ConnectionState state;
   final String? message;
@@ -62,7 +64,14 @@ class Esp32Status {
   final String? referenceId;
   final int? referenceRevision;
   final bool supportsXReference;
+  final bool supportsBootNotice;
+  final bool bootNoticePending;
   bool get isConnected => state == Esp32ConnectionState.connected;
+}
+
+/// Receipt only: does not zero, restore, or move the X axis.
+abstract interface class BootNoticeEsp32Service {
+  Future<void> acknowledgeBoot(String bootId);
 }
 
 /// Optional capability. Assigns a coordinate only after an explicit physical

@@ -11,6 +11,8 @@ class Esp32Telemetry {
     this.referenceId,
     this.referenceRevision,
     this.supportsXReference,
+    this.supportsBootNotice,
+    this.bootNoticePending,
     this.requestId,
     this.accepted,
     this.error,
@@ -23,6 +25,8 @@ class Esp32Telemetry {
   final String? referenceId;
   final int? referenceRevision;
   final bool? supportsXReference;
+  final bool? supportsBootNotice;
+  final bool? bootNoticePending;
   final String? requestId;
   final bool? accepted;
   final String? error;
@@ -64,6 +68,11 @@ class Esp32Telemetry {
     final capabilities = value['capabilities'];
     final requestId = value['request_id'];
     final accepted = value['accepted'];
+    final bootPending = value['boot_notice_pending'];
+    if (value.containsKey('boot_notice_pending') &&
+        (bootPending is! bool || bootId == null)) {
+      throw const FormatException('Invalid boot notice');
+    }
     if ((bootId != null && !validReferenceIdentifier(bootId)) ||
         (referenceId != null && !validReferenceIdentifier(referenceId)) ||
         (revision != null && (revision is! int || revision < 0)) ||
@@ -121,6 +130,10 @@ class Esp32Telemetry {
       supportsXReference: capabilities == null
           ? null
           : (capabilities as List).contains('set_x_reference'),
+      supportsBootNotice: capabilities == null
+          ? null
+          : (capabilities as List).contains('ack_boot'),
+      bootNoticePending: bootPending as bool?,
       requestId: type == 'reference_ack' ? requestId as String : null,
       accepted: type == 'reference_ack' ? accepted as bool : null,
       error: value['error'] is String ? value['error'] as String : null,

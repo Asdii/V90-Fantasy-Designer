@@ -45,3 +45,7 @@ jobs:
         run: |
           g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include -Ifirmware/microfantasy-xiao/.pio/libdeps/xiao_esp32c3/ArduinoJson/src firmware/microfantasy-xiao/test/x_reference_protocol_test.cpp -o /tmp/x-reference-protocol-test
           /tmp/x-reference-protocol-test
+      - name: Test persistent boot notice acknowledgements
+        run: |
+          g++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include -Ifirmware/microfantasy-xiao/.pio/libdeps/xiao_esp32c3/ArduinoJson/src firmware/microfantasy-xiao/test/boot_notice_test.cpp -o /tmp/boot-notice-test
+          /tmp/boot-notice-test

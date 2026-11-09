@@ -61,7 +61,7 @@ void main() {
       find.byType(MicroFantasyApp),
       matchesGoldenFile('../build/qa/cut.png'),
     );
-    await tester.tap(find.byKey(const ValueKey('app-tab-1')));
+    await tester.tap(find.byKey(const ValueKey('app-tab-2')));
     await tester.pump(const Duration(milliseconds: 500));
     await expectLater(
       find.byType(MicroFantasyApp),
@@ -73,7 +73,7 @@ void main() {
       find.byType(MicroFantasyApp),
       matchesGoldenFile('../build/qa/settings.png'),
     );
-    await tester.tap(find.byKey(const ValueKey('app-tab-2')));
+    await tester.tap(find.byKey(const ValueKey('app-tab-1')));
     await tester.pump(const Duration(milliseconds: 500));
     await expectLater(
       find.byType(MicroFantasyApp),

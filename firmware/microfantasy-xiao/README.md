@@ -170,6 +170,21 @@ Al conectar y una vez por segundo:
 {"type":"status","connected":true,"service":"microfantasy-machine","api_version":1,"device_id":"microfantasy-aabbccddeeff","hostname":"fantasy-machine.local","ip":"192.168.1.82","ws_port":81,"ws_path":"/ws","status":"incremental_ready","sensor":"unverified","wifi":"ok","inverted":false,"counts_per_mm":512,"boot_id":"fd5e876ef5270419ee7d641f744934d8","reference_id":"calibracion-1","reference_revision":1,"capabilities":["set_x_reference"]}
 ```
 
+El estado anuncia además `capabilities: ["set_x_reference", "ack_boot"]` y
+`boot_notice_pending: true` después de cada encendido o reinicio. Se repite en
+los estados periódicos y en cada nueva conexión hasta recibir:
+
+```json
+{"type":"ack_boot","boot_id":"fd5e876ef5270419ee7d641f744934d8"}
+```
+
+La app confirma solamente después de guardar el aviso localmente; lo muestra con
+acceso a Calibración X. No importa si se abre mucho después de encender la placa.
+El ESP32 responde con un estado con `boot_notice_pending: false`. Se exige el
+`boot_id` vigente; el ACK es idempotente y no cambia contador, cero ni referencia.
+La marca permanece en RAM durante todo el arranque; no se escribe flash por cada
+mensaje. Al reiniciar se crea otro aviso. Una reconexión Wi-Fi no lo reinicia.
+
 `boot_id` es un identificador aleatorio de 128 bits generado una vez por arranque,
 representado como 32 caracteres ASCII hexadecimales (contrato: máximo 80).
 Todos los mensajes `position`, la identidad HTTP/UDP y todos los `status`, incluso
@@ -304,7 +319,8 @@ No exponer puertos 80/81 a Internet. NVS no está cifrada en esta primera versi�
 ## Pruebas
 
 El workflow `Check MicroFantasy firmware` compila para el XIAO y ejecuta pruebas
-de matemática del contador, estado/protocolo de referencia X y recuperación Wi-Fi.
+de matemática del contador, estado/protocolo de referencia X, recuperación Wi-Fi
+y confirmación del aviso de arranque.
 Las pruebas de estado son C++11 puro; las del protocolo usan los headers de la
 misma versión ArduinoJson que instala la compilación PlatformIO. En Linux/macOS,
 desde la raíz del repositorio (compila antes el firmware para obtener esos headers):
@@ -316,6 +332,8 @@ c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmwa
 /tmp/x-reference-test
 c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include -Ifirmware/microfantasy-xiao/.pio/libdeps/xiao_esp32c3/ArduinoJson/src firmware/microfantasy-xiao/test/x_reference_protocol_test.cpp -o /tmp/x-reference-protocol-test
 /tmp/x-reference-protocol-test
+c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include -Ifirmware/microfantasy-xiao/.pio/libdeps/xiao_esp32c3/ArduinoJson/src firmware/microfantasy-xiao/test/boot_notice_test.cpp -o /tmp/boot-notice-test
+/tmp/boot-notice-test
 c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_setup_test.cpp -o /tmp/wifi-setup-test
 /tmp/wifi-setup-test
 c++ -std=c++11 -Wall -Wextra -Werror -Ifirmware/microfantasy-xiao/include firmware/microfantasy-xiao/test/wifi_reconnect_test.cpp -o /tmp/wifi-reconnect-test
@@ -350,6 +368,10 @@ de telemetría y reconexión WebSocket. No sustituyen la prueba eléctrica:
    referencia y revisión, e incorpora el movimiento durante el corte. Con dos
    clientes, confirma que solo el iniciador recibe ACK y ambos reciben status y
    posición. Repite el mismo comando tras mover: el ACK original no debe reanclar.
+10. Enciende la placa con la app cerrada: al abrirla debe aparecer el aviso de
+    arranque con acceso a Calibración X. Ciérrala sin descartar el aviso y vuelve
+    a abrirla: permanece visible. Descártalo, desconecta/reconecta Wi-Fi: no debe
+    reaparecer. Reinicia la placa: aparece uno nuevo sin cambiar automáticamente X.
 
 La velocidad máxima real y la pérdida de pulsos bajo carga deben medirse con
 hardware. Esta implementación por ISR no promete los 650 mm/s máximos del chip.

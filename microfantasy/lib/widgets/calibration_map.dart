@@ -63,7 +63,7 @@ class CalibrationMap extends StatelessWidget {
       excludeSemantics: true,
       label:
           '$description. 0° arriba. ${samples.length} mediciones. $scale. '
-          'X negativo a la izquierda, X positivo a la derecha. '
+          'X positivo a la izquierda, X negativo a la derecha. '
           '${current == null ? '' : 'Ángulo actual ${_angleLabel(current)}. '}'
           '${samples.map((sample) => '${_angleLabel(sample.angle)}: ${sample.offset > 0 ? '+' : ''}${_offsetLabel(sample.offset)} mm').join('; ')}',
       child: DecoratedBox(
@@ -117,7 +117,7 @@ class CalibrationMap extends StatelessWidget {
                 ],
               ),
               const SizedBox(height: 10),
-              Text('−X ← eje X → +X', style: theme.textTheme.labelMedium),
+              Text('+X ← eje X → −X', style: theme.textTheme.labelMedium),
               const SizedBox(height: 4),
               Text(
                 scale,
@@ -250,7 +250,7 @@ class _CalibrationPainter extends CustomPainter {
           for (final sample in samples)
             _anchor(center, base, sample.angle) +
                 Offset(
-                  maxOffset == 0 ? 0 : sample.offset / maxOffset * amplitude,
+                  maxOffset == 0 ? 0 : -sample.offset / maxOffset * amplitude,
                   0,
                 ),
         ], true);
@@ -269,7 +269,7 @@ class _CalibrationPainter extends CustomPainter {
     }
     for (final sample in samples) {
       final anchor = _anchor(center, base, sample.angle);
-      final dx = maxOffset == 0 ? 0.0 : sample.offset / maxOffset * amplitude;
+      final dx = maxOffset == 0 ? 0.0 : -sample.offset / maxOffset * amplitude;
       // Y is deliberately unchanged at every R, even at 0° and 180°.
       final position = Offset(anchor.dx + dx, anchor.dy);
       final active = sample.angle == selected;
