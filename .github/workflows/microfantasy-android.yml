@@ -49,24 +49,14 @@ jobs:
             microfantasy/android/gradle/wrapper/gradle-wrapper.properties
             microfantasy/pubspec.lock
 
-      # Download Gradle before building so transient HTTP failures can be retried
-      # without repeating compilation, signing, or release publication.
+      # Populate the wrapper cache with a checksum-verified curl download.
+      # Java only extracts/executes the ZIP; it no longer downloads it in CI.
       - name: Prepare Gradle distribution
         timeout-minutes: 10
         run: |
+          python3 tool/prepare_gradle.py
           chmod +x android/gradlew
-          for attempt in 1 2 3 4; do
-            echo "Preparing Gradle (attempt $attempt/4)"
-            if ./android/gradlew --version --no-daemon; then
-              exit 0
-            fi
-            if (( attempt < 4 )); then
-              echo "::warning::Gradle bootstrap failed; retrying in $((attempt * 10)) seconds."
-              sleep "$((attempt * 10))"
-            fi
-          done
-          echo "::error::Could not prepare Gradle after 4 attempts. Check the download errors above and rerun the failed job."
-          exit 1
+          ./android/gradlew --version --no-daemon
 
       - uses: subosito/flutter-action@v2
         with:

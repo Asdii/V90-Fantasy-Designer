@@ -119,10 +119,24 @@ incluye fuentes ni documentación. El wrapper está generado con esa misma versi
 verifica el SHA-256 oficial del ZIP y permite 60 segundos por espera de red.
 `actions/setup-java` conserva la distribución y las dependencias Gradle en caché.
 
-El paso **Prepare Gradle distribution** ejecuta únicamente `gradlew --version`:
-si la descarga falla (por ejemplo, HTTP 504), realiza hasta cuatro intentos con
-esperas de 10, 20 y 30 segundos. La compilación, firma y publicación no se repiten
-dentro de ese bucle. El paso tiene un límite de diez minutos.
+El paso **Prepare Gradle distribution** usa `tool/prepare_gradle.py` para descargar
+con `curl`, en lugar de repetir la misma descarga del wrapper Java. Primero usa
+el enlace directo del repositorio oficial `gradle/gradle-distributions` en GitHub;
+si falla, prueba `services.gradle.org`. Cada ruta permite dos reintentos por fallos
+temporales, con tiempos de espera limitados. Ambas rutas son oficiales, pero pueden
+terminar en la misma infraestructura de descarga: no garantizan disponibilidad
+durante una caída completa del proveedor.
+
+El script lee la versión y el SHA-256 de `gradle-wrapper.properties`, comprueba el
+ZIP completo y lo coloca de forma atómica en la caché normal del wrapper. Reutiliza
+una instalación completa o un ZIP previamente verificado. Nunca cambia la versión,
+el checksum ni la URL configurada, y rechaza archivos incompletos o con un hash
+distinto. El wrapper sigue encargándose de extraer y ejecutar Gradle mediante
+`gradlew --version`, pero encuentra el ZIP local y no tiene que descargarlo.
+
+La compilación, firma y publicación no se reintentan dentro de la preparación.
+El paso completo tiene un límite de diez minutos. Las pruebas Python del workflow
+cubren errores 504, fallback, caché y rechazo de descargas corruptas.
 
 Si el proveedor de descarga sigue sin responder, Actions falla sin publicar un APK
 incompleto. Se puede usar **Re-run failed jobs** cuando el servicio se recupere.
